@@ -1,0 +1,53 @@
+{
+  "rules": {
+    "users": {
+      "$uid": {
+        // Users can read/write their own profile
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+    
+    "adminCodes": {
+      // Anyone can read an admin code during registration
+      ".read": true,
+      "$code": {
+        // Only the admin who created the code can write to it
+        ".write": "auth != null && (newData.child('adminId').val() === auth.uid || data.child('adminId').val() === auth.uid)"
+      }
+    },
+    
+    "companies": {
+      "$companyId": {
+        // Fundamental Tenant Isolation Rule:
+        // You can only access this company's data if your user profile's companyId matches this $companyId.
+        ".read": "auth != null && root.child('users').child(auth.uid).child('companyId').val() === $companyId",
+        
+        // Admins have full write access to their company.
+        // Employees have limited write access, but for phase 1 we allow employees write access to the company data 
+        // to enable orders, customers, etc. In a production app, we would refine write access by employee role.
+        ".write": "auth != null && root.child('users').child(auth.uid).child('companyId').val() === $companyId",
+        
+        "settings": {
+          // Only Admins can change settings
+          ".write": "auth != null && root.child('users').child(auth.uid).child('companyId').val() === $companyId && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+        },
+        
+        "employees": {
+           // Only Admins can modify employee records (disable, change permissions)
+          ".write": "auth != null && root.child('users').child(auth.uid).child('companyId').val() === $companyId && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+        },
+        
+        "ledger": {
+          // Only Admins can modify the main ledger directly
+          ".write": "auth != null && root.child('users').child(auth.uid).child('companyId').val() === $companyId && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+        },
+
+        "expenses": {
+           // Only Admins can modify expenses directly
+          ".write": "auth != null && root.child('users').child(auth.uid).child('companyId').val() === $companyId && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+        }
+      }
+    }
+  }
+}

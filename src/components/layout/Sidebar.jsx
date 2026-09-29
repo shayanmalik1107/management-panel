@@ -22,7 +22,7 @@ import { logout } from '../../services/authService';
 import { useToast } from '../../contexts/ToastContext';
 
 export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }) {
-  const { userProfile, companyInfo, isAdmin } = useAuth();
+  const { userProfile, companyInfo, isAdmin, currentUser } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
 

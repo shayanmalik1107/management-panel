@@ -1,7 +1,7 @@
-// Navbar Component
+// Navbar Component — Mobile Responsive
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Menu, Search, Bell, HelpCircle, Plus, ChevronDown, Building } from 'lucide-react';
+import { Menu, Search, Bell, Plus, ChevronDown, Building, X } from 'lucide-react';
 import { ref, onValue, query, orderByChild, equalTo, limitToLast, update, get } from 'firebase/database';
 import { database } from '../../firebase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -11,6 +11,7 @@ export default function Navbar({ onToggleSidebar, onToggleMobile }) {
   const { userProfile, companyInfo, companyId, isAdmin, currentUser } = useAuth();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
@@ -20,6 +21,7 @@ export default function Navbar({ onToggleSidebar, onToggleMobile }) {
   const notifRef = useRef(null);
   const quickAddRef = useRef(null);
   const switcherRef = useRef(null);
+  const searchRef = useRef(null);
 
   // Real-time listener for all companies owned by this admin
   useEffect(() => {
@@ -69,16 +71,10 @@ export default function Navbar({ onToggleSidebar, onToggleMobile }) {
       return notifications;
     }
     return notifications.filter((n) => {
-      // Exclude admin-specific system notifications for employees
       if (n.type === 'employee_joined' || n.targetRole === 'admin') return false;
-
-      // Match createdBy / userId
       if (n.userId && n.userId === currentUser?.uid) return true;
       if (n.createdBy && n.createdBy === currentUser?.uid) return true;
-
-      // Fallback matching by userName in message string
       if (userProfile?.name && n.message && n.message.includes(`by ${userProfile.name}`)) return true;
-
       return false;
     });
   }, [notifications, isAdmin, currentUser?.uid, userProfile?.name]);
@@ -98,6 +94,9 @@ export default function Navbar({ onToggleSidebar, onToggleMobile }) {
       }
       if (switcherRef.current && !switcherRef.current.contains(e.target)) {
         setShowCompanySwitcher(false);
+      }
+      if (searchRef.current && !searchRef.current.contains(e.target)) {
+        setShowSearch(false);
       }
     };
     document.addEventListener('mousedown', handleClick);
@@ -131,6 +130,7 @@ export default function Navbar({ onToggleSidebar, onToggleMobile }) {
   const handleSearch = (e) => {
     if (e.key === 'Enter' && searchQuery.trim()) {
       navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+      setShowSearch(false);
     }
   };
 
@@ -146,20 +146,34 @@ export default function Navbar({ onToggleSidebar, onToggleMobile }) {
 
   return (
     <header className="navbar">
-      <div className="navbar-left" style={{ minWidth: '200px' }}>
-        <button className="navbar-toggle" onClick={onToggleMobile} style={{ display: 'none' }} id="mobile-menu-toggle">
+      {/* Left: Mobile Menu Toggle + Desktop Sidebar Toggle + Company Switcher */}
+      <div className="navbar-left">
+        {/* Mobile hamburger */}
+        <button
+          className="navbar-toggle navbar-mobile-toggle"
+          onClick={onToggleMobile}
+          aria-label="Open menu"
+        >
           <Menu size={20} />
         </button>
-        
+
+        {/* Desktop collapse toggle */}
+        <button
+          className="navbar-toggle navbar-desktop-toggle"
+          onClick={onToggleSidebar}
+          aria-label="Toggle sidebar"
+        >
+          <Menu size={20} />
+        </button>
+
         {isAdmin && (
-          <div className="dropdown" ref={switcherRef} style={{ marginLeft: 'var(--space-2)' }}>
-            <button 
-              className="btn btn-ghost" 
+          <div className="dropdown navbar-company-switcher" ref={switcherRef}>
+            <button
+              className="btn btn-ghost navbar-company-btn"
               onClick={() => setShowCompanySwitcher(!showCompanySwitcher)}
-              style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', fontWeight: 600, color: 'var(--gray-800)', border: '1px solid var(--gray-200)', borderRadius: 'var(--radius-md)' }}
             >
               <Building size={16} className="text-primary-600" />
-              {companyInfo?.name || 'Select Company'}
+              <span className="navbar-company-name">{companyInfo?.name || 'Select Company'}</span>
               <ChevronDown size={14} className="text-muted" />
             </button>
             {showCompanySwitcher && (
@@ -170,7 +184,7 @@ export default function Navbar({ onToggleSidebar, onToggleMobile }) {
                 {userCompanies.map(comp => {
                   const isClosed = comp.status === 'closed' || comp.status === 'disabled';
                   return (
-                    <button 
+                    <button
                       key={comp.id}
                       className="dropdown-item"
                       style={{
@@ -187,7 +201,6 @@ export default function Navbar({ onToggleSidebar, onToggleMobile }) {
                           alert('This company workspace is closed by System Control.');
                           return;
                         }
-                        // Switch company
                         await update(ref(database, `users/${userProfile.uid}`), { companyId: comp.id });
                         setShowCompanySwitcher(false);
                         window.location.href = '/dashboard';
@@ -206,8 +219,8 @@ export default function Navbar({ onToggleSidebar, onToggleMobile }) {
                   );
                 })}
                 <div style={{ borderTop: '1px solid var(--gray-100)', margin: '4px 0' }}></div>
-                <button 
-                  className="dropdown-item" 
+                <button
+                  className="dropdown-item"
                   style={{ color: 'var(--primary-600)', fontWeight: 500 }}
                   onClick={() => {
                     navigate('/setup');
@@ -222,8 +235,9 @@ export default function Navbar({ onToggleSidebar, onToggleMobile }) {
         )}
       </div>
 
-      <div className="navbar-center" style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
-        <div className="navbar-search" style={{ maxWidth: '500px', width: '100%' }}>
+      {/* Center: Search (hidden on mobile, visible on desktop) */}
+      <div className="navbar-center">
+        <div className="navbar-search">
           <Search size={16} className="search-icon" />
           <input
             type="text"
@@ -235,16 +249,26 @@ export default function Navbar({ onToggleSidebar, onToggleMobile }) {
         </div>
       </div>
 
+      {/* Right: Search (mobile), Quick Add, Notifications, Avatar */}
       <div className="navbar-right">
+        {/* Mobile Search Toggle */}
+        <button
+          className="navbar-icon-btn navbar-mobile-search-btn"
+          onClick={() => setShowSearch(!showSearch)}
+          aria-label="Search"
+        >
+          <Search size={18} />
+        </button>
+
         {/* Quick Add */}
         <div className="dropdown" ref={quickAddRef}>
           <button
-            className="btn btn-primary btn-sm"
+            className="btn btn-primary btn-sm navbar-quick-add-btn"
             onClick={() => setShowQuickAdd(!showQuickAdd)}
             style={{ borderRadius: 'var(--radius-sm)' }}
           >
             <Plus size={16} />
-            <span>New</span>
+            <span className="navbar-new-label">New</span>
           </button>
           {showQuickAdd && (
             <div className="dropdown-menu" style={{ width: 220, right: 0 }}>
@@ -272,7 +296,7 @@ export default function Navbar({ onToggleSidebar, onToggleMobile }) {
             {unreadCount > 0 && <span className="badge-dot" />}
           </button>
           {showNotifications && (
-            <div className="notification-panel">
+            <div className="notification-panel" style={{ maxWidth: 'min(380px, 90vw)' }}>
               <div className="notification-panel-header">
                 <h3>Notifications</h3>
                 {unreadCount > 0 && (
@@ -292,7 +316,6 @@ export default function Navbar({ onToggleSidebar, onToggleMobile }) {
                       key={notif.id}
                       className={`notification-item ${!notif.read ? 'unread' : ''}`}
                       onClick={() => {
-                        // Mark as read
                         if (!notif.read) {
                           update(ref(database, `companies/${companyId}/notifications/${notif.id}`), { read: true });
                         }
@@ -314,7 +337,7 @@ export default function Navbar({ onToggleSidebar, onToggleMobile }) {
           )}
         </div>
 
-        {/* User Account Name & Avatar Display */}
+        {/* User Avatar */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', paddingLeft: '10px', borderLeft: '1px solid var(--gray-200)' }}>
           <div className="navbar-avatar" title={userName}>
             {userInitials}
@@ -326,15 +349,25 @@ export default function Navbar({ onToggleSidebar, onToggleMobile }) {
         </div>
       </div>
 
-      <style>{`
-        @media (max-width: 768px) {
-          #mobile-menu-toggle { display: flex !important; }
-          .desktop-toggle { display: none !important; }
-        }
-        @media (min-width: 769px) {
-          .desktop-toggle { display: flex; }
-        }
-      `}</style>
+      {/* Mobile Search Overlay */}
+      {showSearch && (
+        <div className="navbar-mobile-search-overlay" ref={searchRef}>
+          <div className="navbar-search" style={{ flex: 1 }}>
+            <Search size={16} className="search-icon" />
+            <input
+              type="text"
+              placeholder="Search orders, customers, products..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={handleSearch}
+              autoFocus
+            />
+          </div>
+          <button className="navbar-icon-btn" onClick={() => setShowSearch(false)}>
+            <X size={18} />
+          </button>
+        </div>
+      )}
     </header>
   );
 }

@@ -2128,6 +2128,7 @@ h4 { font-size: var(--font-size-lg); }
 /* ============================================================
    RESPONSIVE
    ============================================================ */
+
 /* ============================================================
    FLAT LIST & TABLE RESPONSIVENESS
    ============================================================ */
@@ -2152,13 +2153,70 @@ h4 { font-size: var(--font-size-lg); }
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 }
 
+/* Table scroll wrapper — only the data table scrolls horizontally */
+.table-scroll-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-scroll-wrapper table,
+.table-scroll-wrapper .data-table {
+  min-width: 640px;
+}
+
 /* ============================================================
-   RESPONSIVE (TABLETS & MOBILE)
+   NAVBAR RESPONSIVE STYLES
+   ============================================================ */
+
+/* Mobile toggle — shown only on small screens */
+.navbar-mobile-toggle {
+  display: none;
+}
+
+/* Desktop toggle — shown only on large screens */
+.navbar-desktop-toggle {
+  display: flex;
+}
+
+/* Company name truncation */
+.navbar-company-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  font-weight: 600;
+  color: var(--gray-800);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  max-width: 200px;
+  overflow: hidden;
+}
+
+.navbar-company-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+
+/* Mobile search overlay */
+.navbar-mobile-search-btn {
+  display: none;
+}
+
+.navbar-mobile-search-overlay {
+  display: none;
+}
+
+/* ============================================================
+   RESPONSIVE (TABLETS & MOBILE) — max-width: 768px
    ============================================================ */
 @media (max-width: 768px) {
+  /* ---- Sidebar ---- */
   .sidebar {
     transform: translateX(-100%);
     z-index: 200;
+    transition: transform var(--transition-slow);
   }
 
   .sidebar.mobile-open {
@@ -2170,42 +2228,122 @@ h4 { font-size: var(--font-size-lg); }
     inset: 0;
     background: rgba(0, 0, 0, 0.5);
     z-index: 150;
+    backdrop-filter: blur(2px);
   }
 
   .main-content {
     margin-left: 0 !important;
   }
 
+  /* ---- Page Content ---- */
   .page-content {
-    padding: var(--space-3);
+    padding: var(--space-3) var(--space-3);
   }
 
+  /* ---- Navbar ---- */
   .navbar {
     padding: 0 var(--space-3);
     gap: var(--space-2);
+    position: relative;
+  }
+
+  .navbar-mobile-toggle {
+    display: flex;
+  }
+
+  .navbar-desktop-toggle {
+    display: none;
+  }
+
+  .navbar-center {
+    display: none !important; /* hide desktop search on mobile */
+  }
+
+  .navbar-mobile-search-btn {
+    display: flex;
+  }
+
+  .navbar-mobile-search-overlay {
+    display: flex;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: white;
+    padding: 0 var(--space-3);
+    align-items: center;
+    gap: var(--space-2);
+    z-index: 20;
+    border-bottom: var(--border);
+  }
+
+  .navbar-mobile-search-overlay .navbar-search {
+    flex: 1;
   }
 
   .navbar-left {
     min-width: auto !important;
+    gap: var(--space-1);
+  }
+
+  .navbar-company-btn {
+    padding: 5px 8px;
+  }
+
+  .navbar-company-name {
+    display: none; /* hide company name on very small nav */
   }
 
   .user-info-navbar {
     display: none !important;
   }
 
-  .navbar-search {
-    max-width: 100% !important;
+  .navbar-new-label {
+    display: none;
   }
 
+  .navbar-quick-add-btn {
+    padding: 7px;
+  }
+
+  /* ---- Page Header ---- */
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
+  }
+
+  .page-header-left h1 {
+    font-size: var(--font-size-xl);
+  }
+
+  .page-header-actions {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .page-header-actions .btn {
+    flex: 1;
+    min-width: 110px;
+    justify-content: center;
+    text-align: center;
+  }
+
+  /* ---- Stat Cards ---- */
   .stat-cards {
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    grid-template-columns: repeat(2, 1fr);
     gap: var(--space-3);
   }
 
+  /* ---- Charts ---- */
   .charts-grid {
     grid-template-columns: 1fr;
   }
 
+  /* ---- Forms ---- */
   .form-row {
     grid-template-columns: 1fr;
   }
@@ -2218,42 +2356,55 @@ h4 { font-size: var(--font-size-lg); }
     grid-template-columns: 1fr;
   }
 
+  /* ---- Table Toolbar — top controls don't scroll horizontally ---- */
   .table-toolbar {
     flex-direction: column;
     align-items: stretch;
     gap: var(--space-2) !important;
+    overflow-x: visible;
   }
 
   .table-toolbar-left,
   .table-toolbar-right {
     width: 100%;
     flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .table-toolbar-right {
+    justify-content: flex-start;
   }
 
   .table-search {
     width: 100% !important;
-    min-width: 100% !important;
+    min-width: 0 !important;
     max-width: 100% !important;
+    flex: 1;
   }
 
-  .navbar-center {
-    display: flex;
-  }
-
-  .page-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--space-3);
-  }
-
-  .page-header-actions {
+  .table-search input {
     width: 100%;
+  }
+
+  /* ---- Filter Panel ---- */
+  .filter-panel-card {
+    padding: var(--space-3);
+    margin-bottom: var(--space-4);
+  }
+
+  .filter-panel-body {
+    grid-template-columns: 1fr;
+    gap: var(--space-3);
+    padding-top: var(--space-3);
+    margin-top: var(--space-3);
+  }
+
+  .filter-btn-group-row {
     flex-wrap: wrap;
   }
 
-  .page-header-actions .btn {
-    flex: 1;
-    min-width: 120px;
+  .filter-btn-pill {
+    min-width: 70px;
   }
 
   .date-range-selector {
@@ -2264,31 +2415,60 @@ h4 { font-size: var(--font-size-lg); }
     grid-template-columns: 1fr;
   }
 
-  /* Modals on mobile */
+  /* ---- Modals on mobile ---- */
   .modal-overlay {
     padding: var(--space-2);
+    align-items: flex-end;
   }
 
   .modal {
-    max-width: 96vw !important;
-    max-height: 94vh !important;
-    margin: auto;
+    max-width: 100% !important;
+    max-height: 92vh !important;
+    width: 100% !important;
+    margin: 0;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   }
 
-  .modal-header,
+  .modal-lg,
+  .modal-xl {
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+
+  .modal-header {
+    padding: var(--space-4) var(--space-4) var(--space-3);
+  }
+
   .modal-footer {
     padding: var(--space-3) var(--space-4);
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .modal-footer .btn {
+    flex: 1;
+    min-width: 100px;
+    justify-content: center;
   }
 
   .modal-body {
-    padding: var(--space-4);
+    padding: var(--space-3) var(--space-4);
     -webkit-overflow-scrolling: touch;
+  }
+
+  /* ---- Notification panel ---- */
+  .notification-panel {
+    right: -12px;
+    width: min(380px, 95vw);
   }
 }
 
+/* ============================================================
+   SMALL PHONES — max-width: 480px
+   ============================================================ */
 @media (max-width: 480px) {
   .stat-cards {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr 1fr;
   }
 
   .stat-card {
@@ -2299,6 +2479,10 @@ h4 { font-size: var(--font-size-lg); }
     font-size: var(--font-size-xl);
   }
 
+  .stat-card-label {
+    font-size: 10px;
+  }
+
   .auth-card {
     padding: var(--space-4);
   }
@@ -2306,7 +2490,7 @@ h4 { font-size: var(--font-size-lg); }
   .modal {
     margin: 0;
     max-width: 100vw !important;
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
   }
 
   .btn {
@@ -2317,6 +2501,43 @@ h4 { font-size: var(--font-size-lg); }
   .btn-sm {
     padding: 5px 10px;
     font-size: 12px;
+  }
+
+  .page-content {
+    padding: var(--space-2);
+  }
+
+  .navbar-company-btn {
+    display: none; /* hide switcher button entirely on very small screens */
+  }
+}
+
+/* ============================================================
+   TABLET — max-width: 1024px
+   ============================================================ */
+@media (max-width: 1024px) and (min-width: 769px) {
+  .sidebar {
+    width: var(--sidebar-collapsed-width);
+  }
+
+  .sidebar .sidebar-brand,
+  .sidebar .sidebar-section-label,
+  .sidebar .link-text,
+  .sidebar .sidebar-user-info {
+    display: none;
+  }
+
+  .sidebar .sidebar-link {
+    justify-content: center;
+    padding: 10px;
+  }
+
+  .main-content {
+    margin-left: var(--sidebar-collapsed-width);
+  }
+
+  .navbar-company-name {
+    max-width: 100px;
   }
 }
 

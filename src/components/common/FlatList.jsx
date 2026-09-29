@@ -79,7 +79,7 @@ export default function FlatList({
             ...containerStyle,
           }}
         >
-          <table className={tableClassName} style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <table className={tableClassName} style={{ width: '100%', minWidth: 600, borderCollapse: 'collapse' }}>
             {HeaderComponent && <HeaderComponent />}
             <tbody>
               {currentBatch.map((item, index) => (
@@ -90,6 +90,7 @@ export default function FlatList({
             </tbody>
           </table>
         </div>
+
 
         {/* Footer info bar showing loaded item count */}
         <div

@@ -1,8 +1,10 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 
 /**
- * FlatList component for high-performance virtualized scrolling
- * Renders ONLY visible rows in the DOM (plus buffer), maintaining 60 FPS even with 10,000+ items.
+ * FlatList component for high-performance lazy & virtualized scrolling
+ * Loads ONLY the initial viewable slice (25 items) when page opens.
+ * As the user scrolls down, it progressively loads subsequent batches (+25 items),
+ * keeping initial page load instantaneous and zero lag.
  */
 export default function FlatList({
   data = [],
@@ -12,51 +14,51 @@ export default function FlatList({
   keyExtractor = (item, i) => item.id || i,
   HeaderComponent,
   EmptyComponent,
-  overscan = 5,
+  initialBatchSize = 25,
+  batchIncrement = 25,
   asTable = true,
   tableClassName = 'data-table',
   containerStyle = {},
 }) {
   const containerRef = useRef(null);
-  const [scrollTop, setScrollTop] = useState(0);
-  const [viewportHeight, setViewportHeight] = useState(600);
+  const [renderedCount, setRenderedCount] = useState(initialBatchSize);
+  const [isScrollLoading, setIsScrollLoading] = useState(false);
+
+  // Reset rendered count whenever data set changes (e.g. search/filtering/tab change)
+  useEffect(() => {
+    setRenderedCount(initialBatchSize);
+    if (containerRef.current) {
+      containerRef.current.scrollTop = 0;
+    }
+  }, [data, initialBatchSize]);
+
+  // Handle scroll to load next batch when near bottom
+  const handleScroll = useCallback(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const { scrollTop, clientHeight, scrollHeight } = el;
+    const distanceToBottom = scrollHeight - (scrollTop + clientHeight);
+
+    if (distanceToBottom < 180 && renderedCount < data.length && !isScrollLoading) {
+      setIsScrollLoading(true);
+      setRenderedCount((prev) => Math.min(data.length, prev + batchIncrement));
+      setTimeout(() => setIsScrollLoading(false), 50);
+    }
+  }, [data.length, renderedCount, batchIncrement, isScrollLoading]);
 
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
 
-    const handleScroll = () => {
-      setScrollTop(el.scrollTop);
-    };
-
-    const handleResize = () => {
-      setViewportHeight(el.clientHeight || 600);
-    };
-
-    handleResize();
     el.addEventListener('scroll', handleScroll, { passive: true });
-    window.addEventListener('resize', handleResize);
-
-    return () => {
-      el.removeEventListener('scroll', handleScroll);
-      window.removeEventListener('resize', handleResize);
-    };
-  }, []);
+    return () => el.removeEventListener('scroll', handleScroll);
+  }, [handleScroll]);
 
   const totalCount = data.length;
-
-  const startIndex = Math.max(0, Math.floor(scrollTop / rowHeight) - overscan);
-  const endIndex = Math.min(totalCount, Math.ceil((scrollTop + viewportHeight) / rowHeight) + overscan);
-
-  const visibleData = useMemo(() => {
-    return data.slice(startIndex, endIndex).map((item, idx) => ({
-      item,
-      actualIndex: startIndex + idx,
-    }));
-  }, [data, startIndex, endIndex]);
-
-  const paddingTop = startIndex * rowHeight;
-  const paddingBottom = Math.max(0, (totalCount - endIndex) * rowHeight);
+  const currentBatch = useMemo(() => {
+    return data.slice(0, renderedCount);
+  }, [data, renderedCount]);
 
   if (totalCount === 0) {
     return EmptyComponent ? <EmptyComponent /> : null;
@@ -64,57 +66,98 @@ export default function FlatList({
 
   if (asTable) {
     return (
-      <div
-        ref={containerRef}
-        className="flat-list-container table-container"
-        style={{
-          maxHeight,
-          overflowY: 'auto',
-          overflowX: 'auto',
-          position: 'relative',
-          WebkitOverflowScrolling: 'touch',
-          ...containerStyle,
-        }}
-      >
-        <table className={tableClassName} style={{ width: '100%', borderCollapse: 'collapse' }}>
-          {HeaderComponent && <HeaderComponent />}
-          <tbody>
-            {paddingTop > 0 && (
-              <tr style={{ height: `${paddingTop}px` }}>
-                <td colSpan={100} style={{ padding: 0, border: 'none', height: `${paddingTop}px` }} />
-              </tr>
-            )}
-            {visibleData.map(({ item, actualIndex }) => (
-              <tr key={keyExtractor(item, actualIndex)} style={{ height: `${rowHeight}px` }}>
-                {renderItem(item, actualIndex)}
-              </tr>
-            ))}
-            {paddingBottom > 0 && (
-              <tr style={{ height: `${paddingBottom}px` }}>
-                <td colSpan={100} style={{ padding: 0, border: 'none', height: `${paddingBottom}px` }} />
-              </tr>
-            )}
-          </tbody>
-        </table>
+      <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+        <div
+          ref={containerRef}
+          className="flat-list-container table-container"
+          style={{
+            maxHeight,
+            overflowY: 'auto',
+            overflowX: 'auto',
+            position: 'relative',
+            WebkitOverflowScrolling: 'touch',
+            ...containerStyle,
+          }}
+        >
+          <table className={tableClassName} style={{ width: '100%', borderCollapse: 'collapse' }}>
+            {HeaderComponent && <HeaderComponent />}
+            <tbody>
+              {currentBatch.map((item, index) => (
+                <tr key={keyExtractor(item, index)} style={{ height: `${rowHeight}px` }}>
+                  {renderItem(item, index)}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Footer info bar showing loaded item count */}
+        <div
+          style={{
+            padding: '8px 16px',
+            background: 'var(--gray-50)',
+            borderTop: '1px solid var(--gray-200)',
+            display: 'flex',
+            justify: 'space-between',
+            alignItems: 'center',
+            fontSize: '12px',
+            color: 'var(--gray-500)',
+            fontWeight: 500,
+          }}
+        >
+          <span>
+            Showing <strong>{currentBatch.length}</strong> of <strong>{totalCount}</strong> entries
+          </span>
+          {currentBatch.length < totalCount ? (
+            <span style={{ color: 'var(--primary-600)', fontStyle: 'italic' }}>
+              Scroll down to load more items (+25)...
+            </span>
+          ) : (
+            <span style={{ color: 'var(--success-600)' }}>✓ All entries loaded</span>
+          )}
+        </div>
       </div>
     );
   }
 
   return (
-    <div
-      ref={containerRef}
-      className="flat-list-container"
-      style={{
-        maxHeight,
-        overflowY: 'auto',
-        position: 'relative',
-        WebkitOverflowScrolling: 'touch',
-        ...containerStyle,
-      }}
-    >
-      <div style={{ paddingTop: `${paddingTop}px`, paddingBottom: `${paddingBottom}px` }}>
-        {visibleData.map(({ item, actualIndex }) =>
-          renderItem(item, actualIndex)
+    <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+      <div
+        ref={containerRef}
+        className="flat-list-container"
+        style={{
+          maxHeight,
+          overflowY: 'auto',
+          position: 'relative',
+          WebkitOverflowScrolling: 'touch',
+          ...containerStyle,
+        }}
+      >
+        {currentBatch.map((item, index) => renderItem(item, index))}
+      </div>
+
+      <div
+        style={{
+          padding: '8px 16px',
+          background: 'var(--gray-50)',
+          borderTop: '1px solid var(--gray-200)',
+          display: 'flex',
+          justify: 'space-between',
+          alignItems: 'center',
+          fontSize: '12px',
+          color: 'var(--gray-500)',
+          fontWeight: 500,
+        }}
+      >
+        <span>
+          Showing <strong>{currentBatch.length}</strong> of <strong>{totalCount}</strong> entries
+        </span>
+        {currentBatch.length < totalCount ? (
+          <span style={{ color: 'var(--primary-600)', fontStyle: 'italic' }}>
+            Scroll down to load more items (+25)...
+          </span>
+        ) : (
+          <span style={{ color: 'var(--success-600)' }}>✓ All entries loaded</span>
         )}
       </div>
     </div>

@@ -124,7 +124,7 @@ export default function EmployeeDashboard() {
       </div>
 
       {/* Stat Cards */}
-      <div className="stat-cards" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+      <div className="stat-cards grid-4col-responsive">
         <div className="stat-card">
           <div className="stat-card-header">
             <span className="stat-card-label">My Orders Today</span>

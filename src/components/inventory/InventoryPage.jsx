@@ -381,7 +381,7 @@ export default function InventoryPage() {
                       </div>
                     )}
 
-                    <div style={{ background: 'var(--gray-50)', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
+                    <div className="form-grid-2col" style={{ background: 'var(--gray-50)', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-3)' }}>
                       <div>
                         <div className="text-xs text-muted">Stored Products</div>
                         <div className="font-semibold text-gray-900">{metrics.productCount} items</div>

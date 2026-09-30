@@ -332,7 +332,7 @@ export default function CreateOrder() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr)', gap: 'var(--space-6)' }}>
+      <div className="grid-2col-responsive">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
           
           {/* Customer Selection */}
@@ -603,7 +603,7 @@ export default function CreateOrder() {
             </div>
             
             <form onSubmit={handleCreateQuickCustomer}>
-              <div className="modal-body form-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
+              <div className="modal-body form-grid form-grid-2col">
                 <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                   <label className="form-label">Shop / Company Name *</label>
                   <input 

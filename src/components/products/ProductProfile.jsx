@@ -102,7 +102,7 @@ export default function ProductProfile() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 2fr)', gap: 'var(--space-6)' }}>
+      <div className="grid-2col-responsive">
         
         {/* Basic Info Sidebar */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
@@ -158,7 +158,7 @@ export default function ProductProfile() {
         {/* Stats and Inventory */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
           
-          <div className="stat-cards" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
+          <div className="stat-cards grid-2col-equal">
             <div className="stat-card" style={{ borderColor: isOutOfStock ? 'var(--danger-200)' : isLowStock ? 'var(--warning-200)' : 'transparent' }}>
               <div className="stat-card-header">
                 <span className="stat-card-label">Current Stock</span>

@@ -530,7 +530,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Recent Orders + Top Sections */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
+      <div className="grid-2col-equal" style={{ marginBottom: 'var(--space-6)' }}>
         {/* Recent Orders */}
         <div className="card">
           <div className="card-header">

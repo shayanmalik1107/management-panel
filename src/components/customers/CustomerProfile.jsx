@@ -80,7 +80,7 @@ export default function CustomerProfile() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 2fr)', gap: 'var(--space-6)' }}>
+      <div className="grid-2col-responsive">
         
         {/* Contact Info Sidebar */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
@@ -137,7 +137,7 @@ export default function CustomerProfile() {
         {/* Stats and History */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
           
-          <div className="stat-cards" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+          <div className="stat-cards grid-3col-responsive">
             <div className="stat-card">
               <div className="stat-card-header">
                 <span className="stat-card-label">Total Orders</span>

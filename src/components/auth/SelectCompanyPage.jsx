@@ -114,68 +114,28 @@ export default function SelectCompanyPage() {
       fontFamily: 'inherit',
     }}>
       {/* Header Bar */}
-      <header style={{
-        background: '#ffffff',
-        borderBottom: '1px solid #e2e8f0',
-        padding: '16px 32px',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{
-            width: 40,
-            height: 40,
-            borderRadius: 10,
-            background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#ffffff',
-            boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)',
-          }}>
+      <header className="select-company-header">
+        <div className="select-company-brand">
+          <div className="select-company-logo">
             <Building2 size={22} />
           </div>
           <div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', lineHeight: 1.2 }}>BizManager</div>
-            <div style={{ fontSize: 12, color: '#64748b', fontWeight: 500 }}>Company Selector</div>
+            <div className="select-company-title">BizManager</div>
+            <div className="select-company-sub">Company Selector</div>
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: '#0f172a' }}>{userProfile?.name || 'Admin'}</div>
-            <div style={{ fontSize: 12, color: '#64748b' }}>{currentUser?.email}</div>
+        <div className="select-company-user">
+          <div className="select-company-user-info">
+            <div className="select-company-user-name">{userProfile?.name || 'Admin'}</div>
+            <div className="select-company-user-email">{currentUser?.email}</div>
           </div>
           <button
             onClick={handleLogout}
-            style={{
-              background: '#f1f5f9',
-              border: '1px solid #cbd5e1',
-              color: '#475569',
-              padding: '8px 14px',
-              borderRadius: 8,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              fontSize: 13,
-              fontWeight: 600,
-              transition: 'all 0.2s',
-            }}
-            onMouseOver={(e) => {
-              e.currentTarget.style.background = '#fee2e2';
-              e.currentTarget.style.color = '#dc2626';
-              e.currentTarget.style.borderColor = '#fca5a5';
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.background = '#f1f5f9';
-              e.currentTarget.style.color = '#475569';
-              e.currentTarget.style.borderColor = '#cbd5e1';
-            }}
+            className="select-company-logout-btn"
+            title="Sign Out"
           >
-            <LogOut size={16} /> Logout
+            <LogOut size={16} /> <span className="logout-text">Logout</span>
           </button>
         </div>
       </header>

@@ -7,7 +7,7 @@ import { formatCurrency, formatNumber, formatDate, timeAgo } from '../../utils/f
 import { getDateRange, ORDER_STATUS_LABELS, ORDER_STATUS_COLORS, PAYMENT_STATUS_LABELS, PAYMENT_STATUS_COLORS } from '../../utils/constants';
 import {
   DollarSign, CreditCard, ShoppingCart, Receipt, ShoppingBag, TrendingUp,
-  AlertTriangle, Package, Plus, ArrowUpRight, RefreshCw, Users, Zap, Loader2, Database
+  AlertTriangle, Package, Plus, ArrowUpRight, RefreshCw, Users, Store
 } from 'lucide-react';
 import {
   LineChart, Line, AreaChart, Area, BarChart, Bar,
@@ -16,7 +16,6 @@ import {
 import OnboardingChecklist from '../onboarding/OnboardingChecklist';
 import { setupCompany } from '../../services/authService';
 import { useToast } from '../../contexts/ToastContext';
-import { seedTestData } from '../../services/seedService';
 
 export default function AdminDashboard() {
   const { companyId, companyInfo, currentUser, userProfile, isAdmin } = useAuth();
@@ -26,10 +25,8 @@ export default function AdminDashboard() {
   
   const isSetupMode = location.pathname === '/setup' || !companyId || new URLSearchParams(location.search).get('setup') === 'true';
 
-  // Setup Company & Seeder State
+  // Setup Company State
   const [isSettingUp, setIsSettingUp] = useState(false);
-  const [isSeeding, setIsSeeding] = useState(false);
-  const [seedProgress, setSeedProgress] = useState('');
   const [setupForm, setSetupForm] = useState({ companyName: '', phone: '' });
   const [dateRange, setDateRange] = useState('this_month');
   const [loading, setLoading] = useState(true);
@@ -37,7 +34,8 @@ export default function AdminDashboard() {
     totalSales: 0, paymentsReceived: 0, totalOrders: 0,
     totalExpenses: 0, totalPurchases: 0, netProfit: 0,
     outstanding: 0, lowStockCount: 0,
-    paymentsMade: 0, outstandingPayable: 0
+    paymentsMade: 0, outstandingPayable: 0,
+    totalCustomerCreditLeft: 0
   });
   const [recentOrders, setRecentOrders] = useState([]);
   const [recentActivity, setRecentActivity] = useState([]);
@@ -63,6 +61,7 @@ export default function AdminDashboard() {
     let latestPurchases = [];
     let latestProducts = [];
     let latestActivities = [];
+    let latestCustomers = [];
     let debugSnapCount = -1;
 
     const recalculate = () => {
@@ -97,6 +96,11 @@ export default function AdminDashboard() {
       const productSales = {};
       latestProducts.forEach(p => {
         if (p && p.currentStock <= (p.minimumStock || 0)) lowStockCount++;
+      });
+
+      let totalCustomerCreditLeft = 0;
+      latestCustomers.forEach(c => {
+        if (c) totalCustomerCreditLeft += Number(c.currentBalance) || 0;
       });
 
       let cogs = 0;
@@ -142,7 +146,7 @@ export default function AdminDashboard() {
       const recent = [...latestOrders].sort((a, b) => b.createdAt - a.createdAt).slice(0, 8);
       const outstandingPayable = totalPurchases - paymentsMade;
 
-      setStats({ totalSales, paymentsReceived, totalOrders: activeOrders.length, totalExpenses, totalPurchases, netProfit, outstanding, lowStockCount, paymentsMade, outstandingPayable, rawOrdersCount: latestOrders.length, rawOrders: latestOrders.map(o => o.orderNumber).join(', '), snapCount: debugSnapCount });
+      setStats({ totalSales, paymentsReceived, totalOrders: activeOrders.length, totalExpenses, totalPurchases, netProfit, outstanding, lowStockCount, paymentsMade, outstandingPayable, totalCustomerCreditLeft, rawOrdersCount: latestOrders.length, rawOrders: latestOrders.map(o => o.orderNumber).join(', '), snapCount: debugSnapCount });
       setRecentOrders(recent);
       setChartData(chartArr);
       setTopProducts(topProds);
@@ -200,6 +204,16 @@ export default function AdminDashboard() {
     });
     unsubs.push(productsUnsub);
 
+    // Customers listener
+    const customersUnsub = onValue(ref(database, `companies/${companyId}/customers`), (snap) => {
+      latestCustomers = [];
+      if (snap.exists()) {
+        snap.forEach(c => { latestCustomers.push({ id: c.key, ...c.val() }); });
+      }
+      recalculate();
+    });
+    unsubs.push(customersUnsub);
+
     // Activities listener
     const activitiesUnsub = onValue(ref(database, `companies/${companyId}/activities`), (snap) => {
       latestActivities = [];
@@ -213,24 +227,6 @@ export default function AdminDashboard() {
 
     return () => unsubs.forEach(u => u());
   }, [companyId, dateRange]);
-
-  const handleSeedDemoData = async () => {
-    if (!companyId) return;
-    if (!window.confirm('Generate 1,000 demo orders, 100 customer shops, and 100 products in database for testing?')) {
-      return;
-    }
-    setIsSeeding(true);
-    try {
-      await seedTestData(companyId, (status) => setSeedProgress(status));
-      toast.success('Successfully generated 1,000 Orders, 100 Shops, and 100 Products!');
-    } catch (err) {
-      console.error('Failed to seed demo data:', err);
-      toast.error('Failed to generate demo data: ' + (err.message || 'Error'));
-    } finally {
-      setIsSeeding(false);
-      setSeedProgress('');
-    }
-  };
 
   const handleSetupCompany = async (e) => {
     e.preventDefault();
@@ -261,7 +257,9 @@ export default function AdminDashboard() {
     { label: '7 Days', value: '7days' },
     { label: '30 Days', value: '30days' },
     { label: 'This Month', value: 'this_month' },
+    { label: 'Last Month', value: 'last_month' },
     { label: 'This Year', value: 'this_year' },
+    { label: 'All Time', value: 'all' },
   ];
 
   if (isSetupMode) {
@@ -352,23 +350,6 @@ export default function AdminDashboard() {
           <p className="text-muted text-sm">Welcome back! Here's your business overview.</p>
         </div>
         <div className="page-header-actions">
-          {isAdmin && (
-            <button
-              className="btn btn-secondary"
-              onClick={handleSeedDemoData}
-              disabled={isSeeding}
-              title="Generate 1,000 Orders, 100 Shops & 100 Products for performance testing"
-              style={{
-                border: '1px solid var(--primary-300)',
-                color: 'var(--primary-700)',
-                background: 'var(--primary-50)',
-                fontWeight: 600
-              }}
-            >
-              {isSeeding ? <Loader2 size={15} className="spin" /> : <Zap size={15} style={{ color: 'var(--primary-600)' }} />}
-              {isSeeding ? (seedProgress || 'Seeding Data...') : '⚡ Seed Demo Data (1000 Orders)'}
-            </button>
-          )}
           <div className="date-range-selector">
             {dateRangeOptions.map((opt) => (
               <button
@@ -401,12 +382,26 @@ export default function AdminDashboard() {
           <div className="text-xs text-muted mt-1">{stats.totalOrders} active orders</div>
         </div>
 
-        <div className="stat-card">
+        <div className="stat-card" style={{ cursor: 'pointer' }} onClick={() => navigate('/ledger')}>
           <div className="stat-card-header">
-            <span className="stat-card-label">Outstanding (Due from Cust.)</span>
-            <div className="stat-card-icon orange"><DollarSign size={18} /></div>
+            <span className="stat-card-label">Payment Received</span>
+            <div className="stat-card-icon green"><CreditCard size={18} /></div>
           </div>
-          <div className="stat-card-value">{loading ? '...' : formatCurrency(stats.outstanding, currency)}</div>
+          <div className="stat-card-value" style={{ color: 'var(--success-600)' }}>
+            {loading ? '...' : formatCurrency(stats.paymentsReceived, currency)}
+          </div>
+          <div className="text-xs text-muted mt-1">Received in selected period</div>
+        </div>
+
+        <div className="stat-card" style={{ cursor: 'pointer' }} onClick={() => navigate('/customers')}>
+          <div className="stat-card-header">
+            <span className="stat-card-label">Credit Left</span>
+            <div className="stat-card-icon orange"><Store size={18} /></div>
+          </div>
+          <div className="stat-card-value" style={{ color: stats.totalCustomerCreditLeft > 0 ? 'var(--warning-600)' : 'inherit' }}>
+            {loading ? '...' : formatCurrency(stats.totalCustomerCreditLeft, currency)}
+          </div>
+          <div className="text-xs text-muted mt-1">Total outstanding shop credit</div>
         </div>
 
         <div className="stat-card">

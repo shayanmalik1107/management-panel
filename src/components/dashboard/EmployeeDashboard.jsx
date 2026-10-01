@@ -6,7 +6,7 @@ import { database } from '../../firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import { formatCurrency, formatNumber, formatDate } from '../../utils/formatters';
 import { getDateRange, ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from '../../utils/constants';
-import { ShoppingCart, Plus, TrendingUp, Clock, Users, Store } from 'lucide-react';
+import { ShoppingCart, Plus, TrendingUp, Clock, Users, Store, CreditCard } from 'lucide-react';
 
 
 export default function EmployeeDashboard() {
@@ -18,6 +18,8 @@ export default function EmployeeDashboard() {
     mySalesToday: 0,
     pendingOrders: 0,
     customersAdded: 0,
+    paymentsReceivedToday: 0,
+    totalCreditLeft: 0,
   });
   const [recentOrders, setRecentOrders] = useState([]);
   const currency = companyInfo?.currency || 'Rs';
@@ -54,14 +56,33 @@ export default function EmployeeDashboard() {
       const activeToday = todayOrders.filter(o => o.status !== 'cancelled' && o.status !== 'returned');
       const pending = myOrders.filter(o => o.status === 'pending' || o.status === 'draft');
 
-      // Load customers added by employee
+      // Load payments
+      const paymentsRef = ref(database, `companies/${companyId}/payments`);
+      const paymentsSnap = await get(paymentsRef);
+      let paymentsReceivedToday = 0;
+      if (paymentsSnap.exists()) {
+        paymentsSnap.forEach((child) => {
+          const val = child.val();
+          if (val && val.createdAt && val.createdAt >= today.start && val.createdAt <= today.end) {
+            if (val.type !== 'supplier_payment') {
+              paymentsReceivedToday += (val.amount || 0);
+            }
+          }
+        });
+      }
+
+      // Load customers added by employee & total shop credit
       const customersRef = ref(database, `companies/${companyId}/customers`);
       const customersSnap = await get(customersRef);
       let customersAdded = 0;
+      let totalCreditLeft = 0;
       if (customersSnap.exists()) {
         customersSnap.forEach((child) => {
           const val = child.val();
-          if (val && val.createdBy === uid) customersAdded++;
+          if (val) {
+            if (val.createdBy === uid) customersAdded++;
+            totalCreditLeft += (Number(val.currentBalance) || 0);
+          }
         });
       }
 
@@ -70,6 +91,8 @@ export default function EmployeeDashboard() {
         mySalesToday: activeToday.reduce((sum, o) => sum + (o.grandTotal || 0), 0),
         pendingOrders: pending.length,
         customersAdded,
+        paymentsReceivedToday,
+        totalCreditLeft,
       });
 
       setRecentOrders(myOrders.sort((a, b) => b.createdAt - a.createdAt).slice(0, 10));
@@ -124,7 +147,7 @@ export default function EmployeeDashboard() {
       </div>
 
       {/* Stat Cards */}
-      <div className="stat-cards grid-4col-responsive">
+      <div className="stat-cards">
         <div className="stat-card">
           <div className="stat-card-header">
             <span className="stat-card-label">My Orders Today</span>
@@ -139,6 +162,24 @@ export default function EmployeeDashboard() {
             <div className="stat-card-icon green"><TrendingUp size={18} /></div>
           </div>
           <div className="stat-card-value">{loading ? '...' : formatCurrency(stats.mySalesToday, currency)}</div>
+        </div>
+
+        <div className="stat-card">
+          <div className="stat-card-header">
+            <span className="stat-card-label">Payment Received (Today)</span>
+            <div className="stat-card-icon green"><CreditCard size={18} /></div>
+          </div>
+          <div className="stat-card-value">{loading ? '...' : formatCurrency(stats.paymentsReceivedToday, currency)}</div>
+        </div>
+
+        <div className="stat-card">
+          <div className="stat-card-header">
+            <span className="stat-card-label">Credit Left</span>
+            <div className="stat-card-icon orange"><Store size={18} /></div>
+          </div>
+          <div className="stat-card-value" style={{ color: stats.totalCreditLeft > 0 ? 'var(--warning-600)' : 'inherit' }}>
+            {loading ? '...' : formatCurrency(stats.totalCreditLeft, currency)}
+          </div>
         </div>
 
         <div className="stat-card">

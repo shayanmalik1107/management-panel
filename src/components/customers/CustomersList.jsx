@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Store } from 'lucide-react';
+import { Plus, Search, Store, Edit, Trash2 } from 'lucide-react';
 import { ref, onValue } from 'firebase/database';
 import { database } from '../../firebase';
 import { useAuth } from '../../contexts/AuthContext';
+import { useToast } from '../../contexts/ToastContext';
+import { deleteCustomer } from '../../services/customerService';
 import { formatCurrency, timeAgo } from '../../utils/formatters';
 
 import FlatList from '../common/FlatList';
@@ -11,12 +13,15 @@ import FlatList from '../common/FlatList';
 export default function CustomersList() {
   const { companyId, companyInfo, hasPermission, isAdmin, currentUser, userProfile } = useAuth();
   const navigate = useNavigate();
+  const toast = useToast();
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
   const currency = companyInfo?.currency || 'Rs';
   const canCreate = hasPermission('createCustomers');
+  const canEdit = hasPermission('editCustomers');
+  const canDelete = hasPermission('deleteCustomers') || isAdmin;
   const canViewBalance = hasPermission('viewCustomerBalance');
 
   useEffect(() => {
@@ -52,6 +57,23 @@ export default function CustomersList() {
       c.contactPerson?.toLowerCase().includes(search.toLowerCase());
     return matchesOwner && matchesSearch;
   });
+
+  const handleEdit = (e, customerId) => {
+    e.stopPropagation();
+    navigate(`/customers/${customerId}/edit`);
+  };
+
+  const handleDelete = async (e, customer) => {
+    e.stopPropagation();
+    if (window.confirm(`Are you sure you want to delete shop "${customer.shopName}"? This cannot be undone.`)) {
+      try {
+        await deleteCustomer(companyId, customer.id, customer.shopName, currentUser?.uid, userProfile?.name);
+        toast.success(`Shop "${customer.shopName}" deleted successfully`);
+      } catch (err) {
+        toast.error('Failed to delete shop');
+      }
+    }
+  };
 
   return (
     <div>
@@ -90,7 +112,7 @@ export default function CustomersList() {
           ) : (
             <FlatList
               data={filteredCustomers}
-              rowHeight={56}
+              rowHeight={60}
               maxHeight="calc(100vh - 280px)"
               keyExtractor={(c) => c.id}
               HeaderComponent={() => (
@@ -101,6 +123,7 @@ export default function CustomersList() {
                     <th>Orders</th>
                     {canViewBalance && <th>Outstanding Balance</th>}
                     <th>Last Order</th>
+                    <th style={{ textAlign: 'right', paddingRight: 'var(--space-4)' }}>Actions</th>
                   </tr>
                 </thead>
               )}
@@ -122,6 +145,32 @@ export default function CustomersList() {
                   )}
                   <td onClick={() => navigate(`/customers/${customer.id}`)} style={{ cursor: 'pointer' }} className="text-sm text-muted">
                     {customer.lastOrderDate ? timeAgo(customer.lastOrderDate) : 'Never'}
+                  </td>
+                  <td style={{ textAlign: 'right', width: 100, paddingRight: 'var(--space-4)' }} onClick={(e) => e.stopPropagation()}>
+                    <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end' }}>
+                      {canEdit && (
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          title="Edit Shop"
+                          style={{ padding: '4px 6px' }}
+                          onClick={(e) => handleEdit(e, customer.id)}
+                        >
+                          <Edit size={16} style={{ color: 'var(--primary-600)' }} />
+                        </button>
+                      )}
+                      {canDelete && (
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          title="Delete Shop"
+                          style={{ padding: '4px 6px' }}
+                          onClick={(e) => handleDelete(e, customer)}
+                        >
+                          <Trash2 size={16} style={{ color: 'var(--danger-500)' }} />
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </>
               )}

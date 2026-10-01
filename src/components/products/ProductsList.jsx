@@ -266,8 +266,7 @@ export default function ProductsList() {
                     {isAdmin && <td onClick={() => navigate(`/products/${product.id}`)}>{formatCurrency(product.purchasePrice, currency)}</td>}
                     <td className="font-medium" onClick={() => navigate(`/products/${product.id}`)}>{formatCurrency(product.salePrice, currency)}</td>
                     <td onClick={() => navigate(`/products/${product.id}`)}>
-                      {product.currentStock}{' '}
-                      {String(product.unit) !== String(product.currentStock) ? product.unit || '' : ''}
+                      {product.currentStock} pcs
                     </td>
                     <td onClick={() => navigate(`/products/${product.id}`)}>
                       {isOutOfStock ? (

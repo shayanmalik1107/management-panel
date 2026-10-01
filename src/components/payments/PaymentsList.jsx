@@ -15,7 +15,9 @@ export default function PaymentsList() {
   const toast = useToast();
   const currency = companyInfo?.currency || 'Rs';
 
-  const [payments, setPayments] = useState([]);
+  const [activeTab, setActiveTab] = useState('supplier');
+  const [supplierPayments, setSupplierPayments] = useState([]);
+  const [customerPayments, setCustomerPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
@@ -24,7 +26,7 @@ export default function PaymentsList() {
   const [quickFilter, setQuickFilter] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [selectedSupplier, setSelectedSupplier] = useState('all');
+  const [selectedParty, setSelectedParty] = useState('all');
   const [selectedMethod, setSelectedMethod] = useState('all');
 
   // Modal Edit State
@@ -45,37 +47,47 @@ export default function PaymentsList() {
     const paymentsRef = ref(database, `companies/${companyId}/payments`);
 
     const unsubscribe = onValue(paymentsRef, (snapshot) => {
-      const dbList = [];
+      const supList = [];
+      const custList = [];
       if (snapshot.exists()) {
         snapshot.forEach((child) => {
           const p = child.val();
           if (p.type === 'supplier_payment') {
-            dbList.push({ id: child.key, ...p });
+            supList.push({ id: child.key, ...p });
+          } else if (p.type === 'customer_payment') {
+            custList.push({ id: child.key, ...p });
           }
         });
       }
 
-      dbList.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-      setPayments(dbList);
+      supList.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      custList.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      setSupplierPayments(supList);
+      setCustomerPayments(custList);
       setLoading(false);
     }, (err) => {
       console.error('Payments listener error:', err);
-      setPayments([]);
+      setSupplierPayments([]);
+      setCustomerPayments([]);
       setLoading(false);
     });
 
     return () => unsubscribe();
   }, [companyId]);
 
-  // Dynamic Supplier Options
-  const supplierOptions = useMemo(() => {
+  // Current active dataset
+  const activePayments = activeTab === 'supplier' ? supplierPayments : customerPayments;
+
+  // Dynamic Party Options (Supplier or Customer Name)
+  const partyOptions = useMemo(() => {
     const map = new Map();
-    payments.forEach(p => {
-      if (p.supplierName) map.set(p.supplierName, p.supplierName);
+    activePayments.forEach(p => {
+      const name = p.supplierName || p.customerName;
+      if (name) map.set(name, name);
     });
     const list = Array.from(map.keys()).map(name => ({ value: name, label: name }));
-    return [{ value: 'all', label: 'All Suppliers' }, ...list];
-  }, [payments]);
+    return [{ value: 'all', label: activeTab === 'supplier' ? 'All Suppliers' : 'All Customers/Shops' }, ...list];
+  }, [activePayments, activeTab]);
 
   // Method Options
   const methodOptions = useMemo(() => [
@@ -92,14 +104,14 @@ export default function PaymentsList() {
     setQuickFilter('');
     setStartDate('');
     setEndDate('');
-    setSelectedSupplier('all');
+    setSelectedParty('all');
     setSelectedMethod('all');
   };
 
   const handleOpenEdit = (payment) => {
     setEditingPayment(payment);
     setEditForm({
-      supplierName: payment.supplierName || '',
+      supplierName: payment.supplierName || payment.customerName || '',
       reference: payment.reference || '',
       amount: payment.amount || 0,
       paymentMethod: payment.paymentMethod || 'Cash',
@@ -110,7 +122,7 @@ export default function PaymentsList() {
   const handleSaveEdit = async (e) => {
     e.preventDefault();
     if (!editForm.supplierName.trim()) {
-      toast.error('Supplier name is required');
+      toast.error('Party name is required');
       return;
     }
     if (Number(editForm.amount) <= 0) {
@@ -146,16 +158,17 @@ export default function PaymentsList() {
     }
   };
 
-  const filteredPayments = payments.filter(p => {
+  const filteredPayments = activePayments.filter(p => {
+    const partyName = p.supplierName || p.customerName || '';
     const matchesSearch =
       !search ||
-      p.supplierName?.toLowerCase().includes(search.toLowerCase()) ||
+      partyName.toLowerCase().includes(search.toLowerCase()) ||
       p.reference?.toLowerCase().includes(search.toLowerCase()) ||
       p.createdByName?.toLowerCase().includes(search.toLowerCase());
 
-    const matchesSupplier =
-      !selectedSupplier || selectedSupplier === 'all' ||
-      p.supplierName === selectedSupplier;
+    const matchesParty =
+      !selectedParty || selectedParty === 'all' ||
+      partyName === selectedParty;
 
     const matchesMethod =
       !selectedMethod || selectedMethod === 'all' ||
@@ -168,7 +181,7 @@ export default function PaymentsList() {
       if (endDate && pDateStr > endDate) matchesDate = false;
     }
 
-    return matchesSearch && matchesSupplier && matchesMethod && matchesDate;
+    return matchesSearch && matchesParty && matchesMethod && matchesDate;
   });
 
   const totalPaymentSum = filteredPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
@@ -177,22 +190,43 @@ export default function PaymentsList() {
     <div>
       <div className="page-header">
         <div className="page-header-left">
-          <h1>Payments Made</h1>
-          <p className="text-muted text-sm">Manage payments made to your suppliers and vendors</p>
+          <h1>Financial Payments</h1>
+          <p className="text-muted text-sm">Manage payments made to suppliers and payments received from shop credits</p>
         </div>
-        <div className="page-header-actions">
+        <div className="page-header-actions" style={{ display: 'flex', gap: 'var(--space-2)' }}>
           {isAdmin && (
-            <button className="btn btn-primary" onClick={() => navigate('/payments/new')}>
-              <Plus size={16} /> Make Payment
-            </button>
+            <>
+              <button className="btn btn-secondary" onClick={() => navigate('/payments/customer-new')}>
+                <Plus size={16} /> Receive Payment (Shops)
+              </button>
+              <button className="btn btn-primary" onClick={() => navigate('/payments/new')}>
+                <Plus size={16} /> Make Payment (Suppliers)
+              </button>
+            </>
           )}
         </div>
       </div>
 
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-4)' }}>
+        <button
+          className={`btn ${activeTab === 'supplier' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => { setActiveTab('supplier'); handleResetFilters(); }}
+        >
+          <CreditCard size={16} /> Supplier Payments Made ({supplierPayments.length})
+        </button>
+        <button
+          className={`btn ${activeTab === 'customer' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => { setActiveTab('customer'); handleResetFilters(); }}
+        >
+          <ShoppingBag size={16} /> Shop Credit Payments Received ({customerPayments.length})
+        </button>
+      </div>
+
       {/* Collapsible Payment Filters Panel */}
       <FilterPanel
-        title="Payment Filters"
-        subtitle="Filter and analyze supplier payments by date range & method"
+        title={activeTab === 'supplier' ? 'Supplier Payment Filters' : 'Shop Credit Payment Filters'}
+        subtitle="Filter and analyze payments by date range & method"
         icon={Filter}
         period={period}
         setPeriod={setPeriod}
@@ -202,10 +236,10 @@ export default function PaymentsList() {
         setEndDate={setEndDate}
         quickFilter={quickFilter}
         setQuickFilter={setQuickFilter}
-        dropdown1Label="Supplier"
-        dropdown1Value={selectedSupplier}
-        setDropdown1Value={setSelectedSupplier}
-        dropdown1Options={supplierOptions}
+        dropdown1Label={activeTab === 'supplier' ? 'Supplier' : 'Shop / Customer'}
+        dropdown1Value={selectedParty}
+        setDropdown1Value={setSelectedParty}
+        dropdown1Options={partyOptions}
         dropdown1Icon={ShoppingBag}
         dropdown2Label="Payment Method"
         dropdown2Value={selectedMethod}
@@ -221,13 +255,13 @@ export default function PaymentsList() {
             <Search size={16} className="search-icon" />
             <input
               type="text"
-              placeholder="Search payments by supplier or reference..."
+              placeholder={activeTab === 'supplier' ? "Search payments by supplier..." : "Search payments by shop name..."}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
           <div className="font-semibold text-success text-sm">
-            Total Payments: {formatCurrency(totalPaymentSum, currency)}
+            Total {activeTab === 'supplier' ? 'Paid' : 'Received'}: {formatCurrency(totalPaymentSum, currency)}
           </div>
         </div>
 
@@ -240,20 +274,20 @@ export default function PaymentsList() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Date</th>
-                  <th>Supplier</th>
+                  <th>Date & Time</th>
+                  <th>{activeTab === 'supplier' ? 'Supplier Name' : 'Shop / Customer Name'}</th>
                   <th>Reference</th>
                   <th>Method</th>
-                  <th>Amount Paid</th>
+                  <th>{activeTab === 'supplier' ? 'Amount Paid' : 'Amount Received'}</th>
                   <th>Recorded By</th>
-                  {isAdmin && <th style={{ textAlign: 'right' }}>Actions</th>}
+                  {isAdmin && activeTab === 'supplier' && <th style={{ textAlign: 'right' }}>Actions</th>}
                 </tr>
               </thead>
               <tbody>
                 {filteredPayments.map(payment => (
                   <tr key={payment.id}>
                     <td className="text-sm text-muted">{formatDate(payment.createdAt)}</td>
-                    <td className="font-medium">{payment.supplierName}</td>
+                    <td className="font-medium">{payment.supplierName || payment.customerName}</td>
                     <td>{payment.reference || '—'}</td>
                     <td>
                       <span className="badge badge-gray">{payment.paymentMethod || 'Cash'}</span>
@@ -262,7 +296,7 @@ export default function PaymentsList() {
                       {formatCurrency(payment.amount, currency)}
                     </td>
                     <td className="text-sm">{payment.createdByName || 'User'}</td>
-                    {isAdmin && (
+                    {isAdmin && activeTab === 'supplier' && (
                       <td style={{ textAlign: 'right' }}>
                         <div style={{ display: 'flex', gap: 'var(--space-1)', justifyContent: 'flex-end' }}>
                           <button
@@ -292,11 +326,19 @@ export default function PaymentsList() {
                 <CreditCard size={24} />
               </div>
               <h3>No payments recorded</h3>
-              <p>Record your first payment to a supplier here.</p>
+              <p>{activeTab === 'supplier' ? 'Record your first payment to a supplier.' : 'Record your first payment received from a shop with credit.'}</p>
               {isAdmin && (
-                <button className="btn btn-primary mt-4" onClick={() => navigate('/payments/new')}>
-                  <Plus size={16} /> Make Payment
-                </button>
+                <div style={{ display: 'flex', gap: 'var(--space-2)', marginTop: 'var(--space-4)' }}>
+                  {activeTab === 'supplier' ? (
+                    <button className="btn btn-primary" onClick={() => navigate('/payments/new')}>
+                      <Plus size={16} /> Make Payment
+                    </button>
+                  ) : (
+                    <button className="btn btn-primary" onClick={() => navigate('/payments/customer-new')}>
+                      <Plus size={16} /> Receive Payment
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           )}

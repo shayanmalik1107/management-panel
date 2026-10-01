@@ -166,7 +166,7 @@ export default function ProductProfile() {
                   <Package size={18} />
                 </div>
               </div>
-              <div className="stat-card-value">{product.currentStock} {product.unit}</div>
+              <div className="stat-card-value">{product.currentStock} pcs</div>
               <div className="text-xs text-muted mt-1">Minimum required: {product.minimumStock || 0}</div>
             </div>
             

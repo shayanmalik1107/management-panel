@@ -50,6 +50,33 @@ export function formatDate(timestamp, format = 'short') {
 }
 
 /**
+ * Format date & time to readable string (e.g., "30 Sep 1:45pm")
+ */
+export function formatDateTime(timestamp) {
+  if (!timestamp) return '—';
+  let date;
+  if (typeof timestamp === 'number') {
+    date = new Date(timestamp);
+  } else if (typeof timestamp === 'string') {
+    if (timestamp.includes('T') || timestamp.includes(':')) {
+      date = new Date(timestamp);
+    } else {
+      const [y, m, d] = timestamp.split('-').map(Number);
+      date = new Date(y, m - 1, d);
+    }
+  } else {
+    date = new Date(timestamp);
+  }
+  if (isNaN(date.getTime())) return '—';
+
+  const day = date.getDate();
+  const month = date.toLocaleDateString('en-GB', { month: 'short' });
+  const timeStr = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase();
+
+  return `${day} ${month} ${timeStr}`;
+}
+
+/**
  * Format number with commas
  */
 export function formatNumber(num) {

@@ -111,3 +111,78 @@ export async function getSupplierBalances(companyId) {
     };
   }).filter(s => s.balance > 0); // Only return suppliers that have a balance
 }
+
+export async function createCustomerPaymentReceived(companyId, paymentData, userId, userName) {
+  if (!paymentData.customerId) {
+    throw new Error('Customer / Shop selection is required');
+  }
+
+  const payAmount = Number(paymentData.amount) || 0;
+  if (payAmount <= 0) {
+    throw new Error('Payment amount must be greater than 0');
+  }
+
+  // Fetch target customer to check current credit balance
+  const custSnap = await get(ref(database, `companies/${companyId}/customers/${paymentData.customerId}`));
+  if (!custSnap.exists()) {
+    throw new Error('Selected customer / shop was not found');
+  }
+
+  const customer = custSnap.val();
+  const currentCredit = Number(customer.currentBalance) || 0;
+
+  // Strict Validation: Cannot write more amount than credit!
+  if (payAmount > currentCredit) {
+    throw new Error(`Payment amount (Rs ${payAmount}) cannot exceed shop's current credit balance of Rs ${currentCredit}`);
+  }
+
+  const paymentId = generateId('pay');
+  const newCreditBalance = Math.max(0, currentCredit - payAmount);
+
+  const payment = {
+    ...paymentData,
+    companyId,
+    customerId: paymentData.customerId,
+    customerName: customer.shopName || customer.customerName || 'Shop',
+    amount: payAmount,
+    type: 'customer_payment',
+    paymentMethod: paymentData.paymentMethod || 'Cash',
+    reference: paymentData.reference || '',
+    notes: paymentData.notes || '',
+    createdBy: userId || '',
+    createdByName: userName || 'User',
+    createdAt: paymentData.createdAt || Date.now(),
+  };
+
+  const updates = {};
+  updates[`companies/${companyId}/payments/${paymentId}`] = payment;
+  updates[`companies/${companyId}/customers/${paymentData.customerId}/currentBalance`] = newCreditBalance;
+  updates[`companies/${companyId}/customers/${paymentData.customerId}/updatedAt`] = Date.now();
+
+  const actId = generateId('act');
+  updates[`companies/${companyId}/activities/${actId}`] = {
+    userId: userId || '',
+    userName: userName || 'User',
+    action: `${userName || 'User'} received payment of Rs ${payAmount} from shop "${customer.shopName || 'Shop'}"`,
+    entityType: 'payment',
+    entityId: paymentId,
+    timestamp: Date.now(),
+  };
+
+  await update(ref(database), updates);
+  return paymentId;
+}
+
+export async function getCustomerPayments(companyId) {
+  const snap = await get(ref(database, `companies/${companyId}/payments`));
+  if (!snap.exists()) return [];
+  const payments = [];
+  snap.forEach(child => {
+    const p = child.val();
+    if (p.type === 'customer_payment') {
+      payments.push({ id: child.key, ...p });
+    }
+  });
+  return payments.sort((a, b) => b.createdAt - a.createdAt);
+}
+

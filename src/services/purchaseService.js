@@ -4,10 +4,13 @@ import { generateId } from '../utils/codeGenerator';
 
 export async function createPurchase(companyId, purchaseData, userId, userName) {
   const purchaseId = generateId('pur');
+  const items = purchaseData.items || [];
+  
   const purchase = {
     ...purchaseData,
     companyId,
-    grandTotal: Number(purchaseData.grandTotal),
+    grandTotal: Number(purchaseData.grandTotal) || 0,
+    items: items,
     createdBy: userId,
     createdByName: userName,
     createdAt: purchaseData.createdAt || Date.now(),
@@ -17,6 +20,48 @@ export async function createPurchase(companyId, purchaseData, userId, userName) 
   const updates = {};
   updates[`companies/${companyId}/purchases/${purchaseId}`] = purchase;
 
+  // Process items to update stock, weighted average cost price, and sale price
+  if (items.length > 0) {
+    // Fetch all current products snapshot
+    const prodSnap = await get(ref(database, `companies/${companyId}/products`));
+    const allProducts = prodSnap.exists() ? prodSnap.val() : {};
+
+    for (const item of items) {
+      if (!item.productId) continue;
+
+      const prod = allProducts[item.productId];
+      if (!prod) continue;
+
+      const existingStock = Number(prod.currentStock) || 0;
+      const existingCostPrice = Number(prod.purchasePrice || prod.costPrice) || 0;
+      const purchasedQty = Number(item.quantity) || 0;
+      const newPurchaseCost = Number(item.purchasePrice) || 0;
+
+      const newTotalStock = existingStock + purchasedQty;
+
+      // Calculate Weighted Average Cost Price
+      let weightedCostPrice = newPurchaseCost;
+      if (existingStock > 0 && newTotalStock > 0) {
+        const oldTotalValue = existingStock * existingCostPrice;
+        const newTotalValue = purchasedQty * newPurchaseCost;
+        weightedCostPrice = Math.round(((oldTotalValue + newTotalValue) / newTotalStock) * 100) / 100;
+      }
+
+      // Update Sale Price if provided
+      const newSalePrice = item.salePrice !== undefined && Number(item.salePrice) > 0 
+        ? Number(item.salePrice) 
+        : (Number(prod.salePrice) || 0);
+
+      // Apply updates to Firebase
+      updates[`companies/${companyId}/products/${item.productId}/currentStock`] = newTotalStock;
+      updates[`companies/${companyId}/products/${item.productId}/purchasePrice`] = weightedCostPrice;
+      updates[`companies/${companyId}/products/${item.productId}/costPrice`] = weightedCostPrice;
+      updates[`companies/${companyId}/products/${item.productId}/salePrice`] = newSalePrice;
+      updates[`companies/${companyId}/products/${item.productId}/updatedAt`] = Date.now();
+    }
+  }
+
+  // Record Activity Log
   const actId = generateId('act');
   updates[`companies/${companyId}/activities/${actId}`] = {
     userId, userName,

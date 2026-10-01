@@ -75,3 +75,21 @@ export async function getCustomer(companyId, customerId) {
   const snap = await get(ref(database, `companies/${companyId}/customers/${customerId}`));
   return snap.exists() ? { id: customerId, ...snap.val() } : null;
 }
+
+export async function deleteCustomer(companyId, customerId, shopName, userId, userName) {
+  const updates = {};
+  updates[`companies/${companyId}/customers/${customerId}`] = null;
+
+  const actId = generateId('act');
+  updates[`companies/${companyId}/activities/${actId}`] = {
+    userId: userId || '',
+    userName: userName || 'User',
+    action: `${userName || 'User'} deleted customer "${shopName || 'Customer'}"`,
+    entityType: 'customer',
+    entityId: customerId,
+    timestamp: Date.now(),
+  };
+
+  await update(ref(database), updates);
+}
+

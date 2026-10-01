@@ -34,6 +34,7 @@ import ExpensesList from './components/expenses/ExpensesList';
 import ExpenseForm from './components/expenses/ExpenseForm';
 import PaymentsList from './components/payments/PaymentsList';
 import CreatePayment from './components/payments/CreatePayment';
+import CreateCustomerPayment from './components/payments/CreateCustomerPayment';
 import LedgerPage from './components/ledger/LedgerPage';
 import SalesPage from './components/sales/SalesPage';
 
@@ -122,6 +123,7 @@ function App() {
             {/* Customers & Products */}
             <Route path="/customers" element={<CustomersList />} />
             <Route path="/customers/new" element={<CustomerForm />} />
+            <Route path="/customers/:id/edit" element={<CustomerForm />} />
             <Route path="/customers/:id" element={<CustomerProfile />} />
             <Route path="/products" element={<ProductsList />} />
             <Route path="/products/new" element={<ProductForm />} />
@@ -139,6 +141,7 @@ function App() {
             <Route path="/expenses/new" element={<AdminRoute><ExpenseForm /></AdminRoute>} />
             <Route path="/payments" element={<AdminRoute><PaymentsList /></AdminRoute>} />
             <Route path="/payments/new" element={<AdminRoute><CreatePayment /></AdminRoute>} />
+            <Route path="/payments/customer-new" element={<AdminRoute><CreateCustomerPayment /></AdminRoute>} />
             <Route path="/ledger" element={<AdminRoute><LedgerPage /></AdminRoute>} />
             <Route path="/sales" element={<AdminRoute><SalesPage /></AdminRoute>} />
             <Route path="/profit-loss" element={<AdminRoute><ProfitLossPage /></AdminRoute>} />

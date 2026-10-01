@@ -1,22 +1,27 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Save, Warehouse, Plus } from 'lucide-react';
+import { ArrowLeft, Save, Warehouse, Plus, ShoppingBag } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { createProduct, getProduct, updateProduct } from '../../services/productService';
 import { getWarehouses, createWarehouse } from '../../services/warehouseService';
+import { fetchAllCompanySuppliers } from '../../services/supplierService';
+import SupplierSelectDropdown from '../common/SupplierSelectDropdown';
+import { formatCurrency } from '../../utils/formatters';
 
 export default function ProductForm() {
   const { id } = useParams();
-  const isEditing = Boolean(id);
+  const isEditing = Boolean(id && id !== 'new');
   
-  const { companyId, currentUser, userProfile, isAdmin } = useAuth();
+  const { companyId, companyInfo, currentUser, userProfile, isAdmin } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
+  const currency = companyInfo?.currency || 'Rs';
   
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [warehouses, setWarehouses] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
   const [showQuickWarehouse, setShowQuickWarehouse] = useState(false);
   const [newWhName, setNewWhName] = useState('');
   const [creatingWh, setCreatingWh] = useState(false);
@@ -26,13 +31,23 @@ export default function ProductForm() {
     sku: '',
     category: '',
     description: '',
-    purchasePrice: 0,
-    salePrice: 0,
-    currentStock: 0,
+    purchasePrice: '',
+    salePrice: '',
+    currentStock: '',
     minimumStock: 0,
     unit: 'pcs',
+    unitType: 'pcs', // 'pcs' or 'box'
+    pricePerBox: '',
+    boxQty: '',
+    subBoxesPerBox: '',
+    pcsPerSubBox: '',
+    freePcsPerBox: '',
     warehouseId: '',
-    warehouseName: ''
+    warehouseName: '',
+    purchaseDate: new Date().toISOString().split('T')[0],
+    supplierName: '',
+    reference: '',
+    notes: ''
   });
 
   useEffect(() => {
@@ -47,51 +62,58 @@ export default function ProductForm() {
   }, [companyId, id]);
 
   const initForm = async () => {
+    if (!companyId) return;
     setInitialLoading(true);
     try {
-      // 1. Fetch Warehouses
-      const whList = await getWarehouses(companyId);
-      setWarehouses(whList);
+      // 1. Fetch Warehouses and all company Suppliers safely
+      const [whList, supList] = await Promise.all([
+        getWarehouses(companyId).catch(() => []),
+        fetchAllCompanySuppliers(companyId).catch(() => [])
+      ]);
+      setWarehouses(whList || []);
+      setSuppliers(supList || []);
 
-      let loadedProduct = null;
-      if (isEditing) {
-        loadedProduct = await getProduct(companyId, id);
-      }
+      if (isEditing && id && id !== 'new') {
+        const loadedProduct = await getProduct(companyId, id).catch(() => null);
+        if (loadedProduct) {
+          let whId = loadedProduct.warehouseId || '';
+          let whName = loadedProduct.warehouseName || '';
 
-      if (isEditing && loadedProduct) {
-        let whId = loadedProduct.warehouseId || '';
-        let whName = loadedProduct.warehouseName || '';
+          if (!whId && whList && whList.length === 1) {
+            whId = whList[0].id;
+            whName = whList[0].name;
+          }
 
-        // If product has no warehouse set yet but exactly 1 warehouse exists, preselect it
-        if (!whId && whList.length === 1) {
-          whId = whList[0].id;
-          whName = whList[0].name;
+          setForm({
+            name: loadedProduct.name || '',
+            sku: loadedProduct.sku || '',
+            category: loadedProduct.category || '',
+            description: loadedProduct.description || '',
+            purchasePrice: loadedProduct.purchasePrice || '',
+            salePrice: loadedProduct.salePrice || '',
+            currentStock: loadedProduct.currentStock || '',
+            minimumStock: loadedProduct.minimumStock || 0,
+            unit: loadedProduct.unit || 'pcs',
+            unitType: loadedProduct.unitType || 'pcs',
+            pricePerBox: loadedProduct.boxDetails?.pricePerBox || '',
+            boxQty: loadedProduct.boxDetails?.boxQty || '',
+            subBoxesPerBox: loadedProduct.boxDetails?.subBoxesPerBox || '',
+            pcsPerSubBox: loadedProduct.boxDetails?.pcsPerSubBox || '',
+            freePcsPerBox: loadedProduct.boxDetails?.freePcsPerBox || '',
+            warehouseId: whId,
+            warehouseName: whName,
+            purchaseDate: new Date().toISOString().split('T')[0],
+            supplierName: '',
+            reference: '',
+            notes: ''
+          });
         }
-
-        setForm({
-          name: loadedProduct.name || '',
-          sku: loadedProduct.sku || '',
-          category: loadedProduct.category || '',
-          description: loadedProduct.description || '',
-          purchasePrice: loadedProduct.purchasePrice || 0,
-          salePrice: loadedProduct.salePrice || 0,
-          currentStock: loadedProduct.currentStock || 0,
-          minimumStock: loadedProduct.minimumStock || 0,
-          unit: loadedProduct.unit || 'pcs',
-          warehouseId: whId,
-          warehouseName: whName
-        });
       } else {
         // Adding new product
         let initialWhId = '';
         let initialWhName = '';
 
-        // If 1 warehouse is added, pre-select it automatically
-        if (whList.length === 1) {
-          initialWhId = whList[0].id;
-          initialWhName = whList[0].name;
-        } else if (whList.length > 1) {
-          // Preselect first warehouse as default
+        if (whList && whList.length >= 1) {
           initialWhId = whList[0].id;
           initialWhName = whList[0].name;
         }
@@ -103,10 +125,10 @@ export default function ProductForm() {
         }));
       }
     } catch (err) {
-      console.error(err);
-      toast.error('Failed to initialize product form');
+      console.error('Error loading product form:', err);
+    } finally {
+      setInitialLoading(false);
     }
-    setInitialLoading(false);
   };
 
   const handleWarehouseChange = (e) => {
@@ -158,6 +180,20 @@ export default function ProductForm() {
     setCreatingWh(false);
   };
 
+  const isBoxUnit = form.unitType === 'box';
+
+  const boxQty = Number(form.boxQty) || 0;
+  const pricePerBox = Number(form.pricePerBox) || 0;
+  const subBoxesPerBox = Number(form.subBoxesPerBox) || 0;
+  const pcsPerSubBox = Number(form.pcsPerSubBox) || 0;
+  const freePcsPerBox = Number(form.freePcsPerBox) || 0;
+
+  const paidPcsPerBox = subBoxesPerBox * pcsPerSubBox;
+  const totalPcsPerBox = paidPcsPerBox + freePcsPerBox;
+  const calculatedTotalPieces = isBoxUnit ? (boxQty * totalPcsPerBox) : (Number(form.currentStock) || 0);
+  const calculatedTotalBuyingCost = isBoxUnit ? (boxQty * pricePerBox) : ((Number(form.currentStock) || 0) * (Number(form.purchasePrice) || 0));
+  const calculatedCostPerPiece = calculatedTotalPieces > 0 ? (calculatedTotalBuyingCost / calculatedTotalPieces) : 0;
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.name.trim()) {
@@ -168,17 +204,52 @@ export default function ProductForm() {
       toast.error('SKU / Barcode is required');
       return;
     }
-    if (form.purchasePrice <= 0) {
-      toast.error('Purchase price / cost is required and must be greater than 0');
-      return;
-    }
     if (form.salePrice <= 0) {
       toast.error('Sale price is required and must be greater than 0');
       return;
     }
-    if (!isEditing && (form.currentStock === '' || form.currentStock === null || form.currentStock < 0)) {
-      toast.error('Initial stock level is required');
-      return;
+
+    if (isBoxUnit) {
+      if (pricePerBox <= 0) {
+        toast.error('Price per box is required and must be greater than 0');
+        return;
+      }
+      if (!isEditing && boxQty <= 0) {
+        toast.error('Box quantity is required and must be greater than 0');
+        return;
+      }
+      if (subBoxesPerBox <= 0) {
+        toast.error('Sub-box quantity per box is required and must be greater than 0');
+        return;
+      }
+      if (pcsPerSubBox <= 0) {
+        toast.error('Pieces per sub-box is required and must be greater than 0');
+        return;
+      }
+    } else {
+      if (form.purchasePrice <= 0) {
+        toast.error('Purchase price / cost is required and must be greater than 0');
+        return;
+      }
+      if (!isEditing && (form.currentStock === '' || form.currentStock === null || Number(form.currentStock) <= 0)) {
+        toast.error('Initial stock quantity is compulsory and must be greater than 0');
+        return;
+      }
+    }
+
+    if (!isEditing) {
+      if (!form.purchaseDate) {
+        toast.error('Purchase date is compulsory for initial stock purchase entry');
+        return;
+      }
+      if (!form.supplierName || !form.supplierName.trim()) {
+        toast.error('Supplier / Vendor Name is compulsory for initial stock purchase entry');
+        return;
+      }
+      if (!form.reference || !form.reference.trim()) {
+        toast.error('Invoice / Bill Reference is compulsory for initial stock purchase entry');
+        return;
+      }
     }
     
     setLoading(true);
@@ -190,8 +261,26 @@ export default function ProductForm() {
         if (found) finalWhName = found.name;
       }
 
+      const finalCurrentStock = isBoxUnit ? calculatedTotalPieces : Number(form.currentStock);
+      const finalPurchasePrice = isBoxUnit ? calculatedCostPerPiece : Number(form.purchasePrice);
+
       const submitData = {
         ...form,
+        unit: 'pcs',
+        unitType: form.unitType,
+        purchasePrice: finalPurchasePrice,
+        currentStock: finalCurrentStock,
+        totalBuyingCost: calculatedTotalBuyingCost,
+        boxDetails: isBoxUnit ? {
+          pricePerBox,
+          boxQty,
+          subBoxesPerBox,
+          pcsPerSubBox,
+          freePcsPerBox,
+          totalPieces: calculatedTotalPieces,
+          totalBuyingCost: calculatedTotalBuyingCost,
+          calculatedCostPerPiece
+        } : null,
         warehouseName: finalWhName
       };
 
@@ -213,6 +302,8 @@ export default function ProductForm() {
   if (initialLoading) {
     return <div className="loading-page"><div className="loading-spinner lg"></div></div>;
   }
+
+  const supplierNames = suppliers.map(s => typeof s === 'string' ? s : (s.name || s.supplierName)).filter(Boolean);
 
   return (
     <div>
@@ -236,8 +327,72 @@ export default function ProductForm() {
       <div className="card" style={{ maxWidth: 800 }}>
         <form className="card-body form-grid" onSubmit={handleSubmit}>
           
+          {/* INITIAL STOCK PURCHASE ENTRY SECTION MOVED TO TOP */}
+          {!isEditing && (
+            <>
+              <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                <h3 style={{ fontSize: 'var(--font-size-md)', borderBottom: 'var(--border)', paddingBottom: 'var(--space-2)', marginBottom: 'var(--space-2)', color: 'var(--primary-700)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                  <ShoppingBag size={18} /> Initial Stock Purchase Entry (Compulsory)
+                </h3>
+                <span className="text-xs text-muted">
+                  Creating a new product requires recording an initial stock purchase in Purchases & General Ledger.
+                </span>
+              </div>
+
+              {/* Purchase Date */}
+              <div className="form-group">
+                <label className="form-label">Purchase Date *</label>
+                <input 
+                  type="date" 
+                  className="form-input" 
+                  value={form.purchaseDate}
+                  onChange={e => setForm({...form, purchaseDate: e.target.value})}
+                  max={new Date().toISOString().split('T')[0]}
+                />
+              </div>
+
+              {/* Bill / Invoice Reference */}
+              <div className="form-group">
+                <label className="form-label">Bill / Invoice Reference *</label>
+                <input 
+                  type="text" 
+                  className="form-input" 
+                  placeholder="e.g. INV-2026-01"
+                  value={form.reference}
+                  onChange={e => setForm({...form, reference: e.target.value})}
+                />
+              </div>
+
+              {/* Custom Searchable Supplier Dropdown */}
+              <SupplierSelectDropdown
+                suppliers={suppliers}
+                value={form.supplierName}
+                onChange={name => setForm({...form, supplierName: name})}
+                onSupplierCreated={async () => {
+                  const supList = await fetchAllCompanySuppliers(companyId);
+                  setSuppliers(supList);
+                }}
+                placeholder="Search or enter supplier name (e.g. Acme Wholesalers)..."
+                label="Supplier / Vendor Name *"
+                required={!isEditing}
+              />
+
+              {/* Additional Notes */}
+              <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                <label className="form-label">Additional Notes</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="Optional purchase notes or details..."
+                  value={form.notes}
+                  onChange={e => setForm({...form, notes: e.target.value})}
+                />
+              </div>
+            </>
+          )}
+
           <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-            <h3 style={{ fontSize: 'var(--font-size-md)', borderBottom: 'var(--border)', paddingBottom: 'var(--space-2)', marginBottom: 'var(--space-2)' }}>
+            <h3 style={{ fontSize: 'var(--font-size-md)', borderBottom: 'var(--border)', paddingBottom: 'var(--space-2)', marginBottom: 'var(--space-2)', marginTop: 'var(--space-4)' }}>
               Basic Information
             </h3>
           </div>
@@ -270,16 +425,6 @@ export default function ProductForm() {
               className="form-input" 
               value={form.category}
               onChange={e => setForm({...form, category: e.target.value})}
-            />
-          </div>
-          
-          <div className="form-group">
-            <label className="form-label">Unit (e.g. pcs, kg, box)</label>
-            <input 
-              type="text" 
-              className="form-input" 
-              value={form.unit}
-              onChange={e => setForm({...form, unit: e.target.value})}
             />
           </div>
 
@@ -396,48 +541,198 @@ export default function ProductForm() {
             </h3>
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Purchase Price / Cost *</label>
-            <input 
-              type="number" 
-              className="form-input" 
-              value={form.purchasePrice}
-              onChange={e => setForm({...form, purchasePrice: Number(e.target.value)})}
-            />
+          {/* Unit Type Options Header Selector */}
+          <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+            <label className="form-label" style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+              Select Product Unit Structure *
+            </label>
+            <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
+              <button
+                type="button"
+                className={`btn ${form.unitType === 'pcs' ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ flex: 1, padding: '10px', justifyContent: 'center' }}
+                onClick={() => setForm({ ...form, unitType: 'pcs', unit: 'pcs' })}
+              >
+                Pieces (pcs)
+              </button>
+              <button
+                type="button"
+                className={`btn ${form.unitType === 'box' ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ flex: 1, padding: '10px', justifyContent: 'center' }}
+                onClick={() => setForm({ ...form, unitType: 'box', unit: 'box' })}
+              >
+                Box Packaging (box)
+              </button>
+            </div>
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Sale Price *</label>
-            <input 
-              type="number" 
-              className="form-input" 
-              value={form.salePrice}
-              onChange={e => setForm({...form, salePrice: Number(e.target.value)})}
-            />
-          </div>
+          {/* BOX PACKAGING MODE FIELDS */}
+          {form.unitType === 'box' ? (
+            <>
+              {/* Price per Box */}
+              <div className="form-group">
+                <label className="form-label">Price per Box ({currency}) *</label>
+                <input 
+                  type="number" 
+                  className="form-input" 
+                  placeholder="e.g. 10000"
+                  value={form.pricePerBox}
+                  onChange={e => setForm({...form, pricePerBox: e.target.value})}
+                  min="0"
+                />
+              </div>
 
-          <div className="form-group">
-            <label className="form-label">Current Stock *</label>
-            <input 
-              type="number" 
-              className="form-input" 
-              value={form.currentStock}
-              onChange={e => setForm({...form, currentStock: Number(e.target.value)})}
-              disabled={isEditing}
-              title={isEditing ? "Use Warehouse module to adjust stock" : ""}
-            />
-            {!isEditing && <span className="form-hint">Initial stock level</span>}
-            {isEditing && <span className="form-hint">Use Warehouse module to adjust stock</span>}
-          </div>
+              {/* Box Quantity (Units in Boxes) */}
+              <div className="form-group">
+                <label className="form-label">Units in Boxes (Box Quantity) *</label>
+                <input 
+                  type="number" 
+                  className="form-input" 
+                  placeholder="e.g. 2"
+                  value={form.boxQty}
+                  onChange={e => setForm({...form, boxQty: e.target.value})}
+                  disabled={isEditing}
+                  min="1"
+                />
+              </div>
 
-          <div className="form-group">
-            <label className="form-label">Minimum Stock Alert</label>
-            <input 
-              type="number" 
-              className="form-input" 
-              value={form.minimumStock}
-              onChange={e => setForm({...form, minimumStock: Number(e.target.value)})}
-            />
+              {/* Sub-box Quantity */}
+              <div className="form-group">
+                <label className="form-label">Sub-box Quantity per Box *</label>
+                <input 
+                  type="number" 
+                  className="form-input" 
+                  placeholder="e.g. 12"
+                  value={form.subBoxesPerBox}
+                  onChange={e => setForm({...form, subBoxesPerBox: e.target.value})}
+                  min="1"
+                />
+              </div>
+
+              {/* Pcs in Per Sub-box */}
+              <div className="form-group">
+                <label className="form-label">Pcs per Sub-box *</label>
+                <input 
+                  type="number" 
+                  className="form-input" 
+                  placeholder="e.g. 24"
+                  value={form.pcsPerSubBox}
+                  onChange={e => setForm({...form, pcsPerSubBox: e.target.value})}
+                  min="1"
+                />
+              </div>
+
+              {/* Free Unit / Pieces per Box */}
+              <div className="form-group">
+                <label className="form-label">Free Pieces per Big Box</label>
+                <input 
+                  type="number" 
+                  className="form-input" 
+                  placeholder="e.g. 25"
+                  value={form.freePcsPerBox}
+                  onChange={e => setForm({...form, freePcsPerBox: e.target.value})}
+                  min="0"
+                />
+              </div>
+
+              {/* Sale Price per Unit / Piece */}
+              <div className="form-group">
+                <label className="form-label">Sale Price per Unit / Piece ({currency}) *</label>
+                <input 
+                  type="number" 
+                  className="form-input" 
+                  placeholder="e.g. 50"
+                  value={form.salePrice}
+                  onChange={e => setForm({...form, salePrice: e.target.value})}
+                  min="0"
+                />
+              </div>
+            </>
+          ) : (
+            /* STANDARD PCS MODE FIELDS */
+            <>
+              <div className="form-group">
+                <label className="form-label">Purchase Price / Cost per Piece ({currency}) *</label>
+                <input 
+                  type="number" 
+                  className="form-input" 
+                  value={form.purchasePrice}
+                  onChange={e => setForm({...form, purchasePrice: e.target.value})}
+                  min="0"
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Sale Price per Piece ({currency}) *</label>
+                <input 
+                  type="number" 
+                  className="form-input" 
+                  value={form.salePrice}
+                  onChange={e => setForm({...form, salePrice: e.target.value})}
+                  min="0"
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Current Stock Quantity (Pcs) *</label>
+                <input 
+                  type="number" 
+                  className="form-input" 
+                  value={form.currentStock}
+                  onChange={e => setForm({...form, currentStock: e.target.value})}
+                  disabled={isEditing}
+                  title={isEditing ? "Use Warehouse module to adjust stock" : ""}
+                  min="0"
+                />
+                {!isEditing && <span className="form-hint">Initial stock level in pieces</span>}
+                {isEditing && <span className="form-hint">Use Warehouse module to adjust stock</span>}
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Minimum Stock Alert (Pcs)</label>
+                <input 
+                  type="number" 
+                  className="form-input" 
+                  value={form.minimumStock}
+                  onChange={e => setForm({...form, minimumStock: e.target.value})}
+                  min="0"
+                />
+              </div>
+            </>
+          )}
+
+          {/* DYNAMIC CALCULATION SUMMARY CARD */}
+          <div style={{ gridColumn: '1 / -1', background: 'var(--primary-50)', border: '1px solid var(--primary-200)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4)', marginTop: 'var(--space-2)' }}>
+            <h4 style={{ color: 'var(--primary-800)', margin: '0 0 var(--space-3) 0', fontSize: '14px', fontWeight: 700 }}>
+              📊 Total Buying Cost & Calculated Stock Breakdown
+            </h4>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 'var(--space-4)' }}>
+              <div>
+                <span style={{ fontSize: '12px', color: 'var(--gray-600)' }}>Total Buying Cost</span>
+                <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--primary-700)', fontFamily: 'monospace' }}>
+                  {formatCurrency(calculatedTotalBuyingCost, currency)}
+                </div>
+              </div>
+              <div>
+                <span style={{ fontSize: '12px', color: 'var(--gray-600)' }}>Total Pieces Added</span>
+                <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--gray-900)' }}>
+                  {calculatedTotalPieces} pcs
+                </div>
+              </div>
+              <div>
+                <span style={{ fontSize: '12px', color: 'var(--gray-600)' }}>Calculated Cost / Piece</span>
+                <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--gray-900)' }}>
+                  {formatCurrency(calculatedCostPerPiece, currency)}
+                </div>
+              </div>
+            </div>
+            {isBoxUnit && (
+              <div style={{ fontSize: '12px', color: 'var(--gray-600)', marginTop: '10px', borderTop: '1px dashed var(--primary-200)', paddingTop: '8px', lineHeight: 1.5 }}>
+                • Paid pcs per box: <strong>{paidPcsPerBox}</strong> ({subBoxesPerBox} sub-boxes × {pcsPerSubBox} pcs)<br/>
+                • Free pcs per box: <strong>{freePcsPerBox}</strong> | Total per box: <strong>{totalPcsPerBox} pcs</strong><br/>
+                • Total for {boxQty} box(es): <strong>{calculatedTotalPieces} total pieces</strong> | Total Cost: <strong>{formatCurrency(calculatedTotalBuyingCost, currency)}</strong>
+              </div>
+            )}
           </div>
 
         </form>

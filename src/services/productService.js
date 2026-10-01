@@ -67,6 +67,44 @@ export async function createProduct(companyId, productData, userId, userName) {
     timestamp: Date.now(),
   };
 
+  // If supplier name is provided with initial stock, also record initial stock purchase
+  if (productData.supplierName && Number(productData.currentStock) > 0) {
+    const purId = generateId('pur');
+    const cost = Number(productData.purchasePrice) || 0;
+    const qty = Number(productData.currentStock) || 0;
+    const total = cost * qty;
+
+    let purchaseTimestamp = Date.now();
+    if (productData.purchaseDate) {
+      const selectedDate = new Date(productData.purchaseDate);
+      const now = new Date();
+      selectedDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
+      purchaseTimestamp = selectedDate.getTime();
+    }
+
+    updates[`companies/${companyId}/purchases/${purId}`] = {
+      id: purId,
+      companyId,
+      supplierName: productData.supplierName,
+      reference: productData.reference || 'Initial Stock',
+      grandTotal: total,
+      items: [{
+        productId: productId,
+        productName: nameTrimmed,
+        sku: skuTrimmed,
+        quantity: qty,
+        purchasePrice: cost,
+        salePrice: Number(productData.salePrice) || 0,
+        lineTotal: total
+      }],
+      notes: productData.notes ? productData.notes : `Initial stock purchase for ${nameTrimmed}`,
+      createdBy: userId || '',
+      createdByName: userName || 'User',
+      createdAt: purchaseTimestamp,
+      updatedAt: Date.now()
+    };
+  }
+
   // Update onboarding
   updates[`companies/${companyId}/onboarding/firstProduct`] = true;
 

@@ -49,3 +49,59 @@ export async function updateSupplier(companyId, supplierId, data) {
   updates[`companies/${companyId}/suppliers/${supplierId}/updatedAt`] = Date.now();
   await update(ref(database), updates);
 }
+
+/**
+ * Fetch all unique supplier names across registered suppliers, purchases, payments, and ledger
+ */
+export async function fetchAllCompanySuppliers(companyId) {
+  try {
+    const [supSnap, purSnap, paySnap, ledSnap] = await Promise.all([
+      get(ref(database, `companies/${companyId}/suppliers`)),
+      get(ref(database, `companies/${companyId}/purchases`)),
+      get(ref(database, `companies/${companyId}/payments`)),
+      get(ref(database, `companies/${companyId}/ledger`))
+    ]);
+
+    const supplierSet = new Set();
+
+    if (supSnap.exists()) {
+      supSnap.forEach(c => {
+        const val = c.val();
+        const name = val?.name || val?.supplierName;
+        if (name && String(name).trim()) supplierSet.add(String(name).trim());
+      });
+    }
+
+    if (purSnap.exists()) {
+      purSnap.forEach(c => {
+        const val = c.val();
+        if (val?.supplierName && String(val.supplierName).trim()) {
+          supplierSet.add(String(val.supplierName).trim());
+        }
+      });
+    }
+
+    if (paySnap.exists()) {
+      paySnap.forEach(c => {
+        const val = c.val();
+        if (val?.supplierName && String(val.supplierName).trim()) {
+          supplierSet.add(String(val.supplierName).trim());
+        }
+      });
+    }
+
+    if (ledSnap.exists()) {
+      ledSnap.forEach(c => {
+        const val = c.val();
+        if (val?.supplierName && String(val.supplierName).trim()) {
+          supplierSet.add(String(val.supplierName).trim());
+        }
+      });
+    }
+
+    return Array.from(supplierSet).sort();
+  } catch (err) {
+    console.error('Error in fetchAllCompanySuppliers:', err);
+    return [];
+  }
+}

@@ -62,13 +62,11 @@ export default function CreatePayment() {
     
     setLoading(true);
     try {
-      const selectedDate = new Date(form.date);
-      const today = new Date();
-      let customTimestamp = Date.now();
-      if (selectedDate.toDateString() !== today.toDateString()) {
-        selectedDate.setHours(12, 0, 0, 0);
-        customTimestamp = selectedDate.getTime();
-      }
+      const parts = form.date.split('-').map(Number);
+      const selectedDate = new Date(parts[0], parts[1] - 1, parts[2]);
+      const now = new Date();
+      selectedDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
+      const customTimestamp = selectedDate.getTime();
 
       await createSupplierPayment(companyId, { ...form, createdAt: customTimestamp }, currentUser.uid, userProfile.name);
       toast.success('Payment recorded successfully');

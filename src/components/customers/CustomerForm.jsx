@@ -18,9 +18,13 @@ export default function CustomerForm() {
   
   const [form, setForm] = useState({
     shopName: '',
+    contactPerson: '',
     phone: '',
     email: '',
     address: '',
+    area: '',
+    city: '',
+    openingBalance: '0',
     notes: ''
   });
 
@@ -43,11 +47,18 @@ export default function CustomerForm() {
       if (cust) {
         setForm({
           shopName: cust.shopName || '',
+          contactPerson: cust.contactPerson || '',
           phone: cust.phone || '',
           email: cust.email || '',
           address: cust.address || '',
+          area: cust.area || '',
+          city: cust.city || '',
+          openingBalance: cust.openingBalance !== undefined ? String(cust.openingBalance) : '0',
           notes: cust.notes || ''
         });
+      } else {
+        toast.error('Customer not found');
+        navigate('/customers');
       }
     } catch (err) {
       toast.error('Failed to load customer');
@@ -65,24 +76,20 @@ export default function CustomerForm() {
       toast.error('Phone number is required');
       return;
     }
-    if (!form.address.trim()) {
-      toast.error('Address is required');
-      return;
-    }
     
     setLoading(true);
     try {
       if (isEditing) {
-        await updateCustomer(companyId, id, form, currentUser.uid, userProfile.name);
-        toast.success('Customer updated successfully');
+        await updateCustomer(companyId, id, form, currentUser?.uid, userProfile?.name);
+        toast.success('Shop updated successfully');
         navigate(`/customers/${id}`);
       } else {
-        const newId = await createCustomer(companyId, form, currentUser.uid, userProfile.name);
-        toast.success('Customer created successfully');
+        const newId = await createCustomer(companyId, form, currentUser?.uid, userProfile?.name);
+        toast.success('Shop created successfully');
         navigate(`/customers/${newId}`);
       }
     } catch (err) {
-      toast.error(err.message || 'Failed to save customer');
+      toast.error(err.message || 'Failed to save shop details');
       setLoading(false);
     }
   };
@@ -96,8 +103,8 @@ export default function CustomerForm() {
       <div className="page-header">
         <div className="page-header-left">
           <div className="page-breadcrumb">
-            <button className="btn btn-link" onClick={() => navigate('/customers')}>
-              <ArrowLeft size={14} /> Back to Customers
+            <button className="btn btn-link" onClick={() => navigate(isEditing ? `/customers/${id}` : '/customers')}>
+              <ArrowLeft size={14} /> {isEditing ? 'Back to Details' : 'Back to Customers'}
             </button>
           </div>
           <h1>{isEditing ? 'Edit Shop / Customer' : 'Add New Shop / Customer'}</h1>
@@ -105,12 +112,12 @@ export default function CustomerForm() {
         <div className="page-header-actions">
           <button className="btn btn-primary" onClick={handleSubmit} disabled={loading}>
             {loading ? <span className="loading-spinner" /> : <Save size={16} />}
-            {isEditing ? 'Save Changes' : 'Create Customer'}
+            {isEditing ? 'Save Changes' : 'Create Shop'}
           </button>
         </div>
       </div>
 
-      <div className="card" style={{ maxWidth: 800 }}>
+      <div className="card" style={{ maxWidth: 800, margin: '0 auto' }}>
         <form className="card-body form-grid" onSubmit={handleSubmit}>
           
           <div className="form-group" style={{ gridColumn: '1 / -1' }}>
@@ -129,6 +136,18 @@ export default function CustomerForm() {
               value={form.shopName}
               onChange={e => setForm({...form, shopName: e.target.value})}
               autoFocus
+            />
+          </div>
+
+          {/* Contact Person */}
+          <div className="form-group">
+            <label className="form-label">Contact Person <span className="text-muted font-normal">(Optional)</span></label>
+            <input 
+              type="text" 
+              className="form-input" 
+              placeholder="e.g. John Doe"
+              value={form.contactPerson}
+              onChange={e => setForm({...form, contactPerson: e.target.value})}
             />
           </div>
 
@@ -156,13 +175,51 @@ export default function CustomerForm() {
             />
           </div>
 
-          {/* Single Line Address * */}
-          <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-            <label className="form-label">Address *</label>
+          {/* City (Optional) */}
+          <div className="form-group">
+            <label className="form-label">City <span className="text-muted font-normal">(Optional)</span></label>
             <input 
               type="text" 
               className="form-input" 
-              placeholder="Street, City, Sector..."
+              placeholder="e.g. Lahore, Karachi"
+              value={form.city}
+              onChange={e => setForm({...form, city: e.target.value})}
+            />
+          </div>
+
+          {/* Area / Sector (Optional) */}
+          <div className="form-group">
+            <label className="form-label">Area / Sector <span className="text-muted font-normal">(Optional)</span></label>
+            <input 
+              type="text" 
+              className="form-input" 
+              placeholder="e.g. Main Market, Block G"
+              value={form.area}
+              onChange={e => setForm({...form, area: e.target.value})}
+            />
+          </div>
+
+          {/* Opening Balance (Only shown when creating) */}
+          {!isEditing && (
+            <div className="form-group">
+              <label className="form-label">Opening Balance <span className="text-muted font-normal">(Rs)</span></label>
+              <input 
+                type="number" 
+                className="form-input" 
+                placeholder="0"
+                value={form.openingBalance}
+                onChange={e => setForm({...form, openingBalance: e.target.value})}
+              />
+            </div>
+          )}
+
+          {/* Address */}
+          <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+            <label className="form-label">Address</label>
+            <input 
+              type="text" 
+              className="form-input" 
+              placeholder="Street, Market, Address details..."
               value={form.address}
               onChange={e => setForm({...form, address: e.target.value})}
             />

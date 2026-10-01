@@ -21,8 +21,9 @@ import { ref, onValue } from 'firebase/database';
 import { database } from '../../firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
-import { formatCurrency, formatDate } from '../../utils/formatters';
+import { formatCurrency, formatDate, formatDateTime } from '../../utils/formatters';
 import { listenLedgerEntries, createLedgerEntry, updateLedgerEntry, deleteLedgerEntry } from '../../services/ledgerService';
+import { getSuppliers } from '../../services/supplierService';
 import FilterPanel from '../common/FilterPanel';
 
 export default function LedgerPage() {
@@ -32,6 +33,7 @@ export default function LedgerPage() {
   const [ledgerEntries, setLedgerEntries] = useState([]);
   const [purchases, setPurchases] = useState([]);
   const [payments, setPayments] = useState([]);
+  const [dbSuppliers, setDbSuppliers] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // Filters State
@@ -43,26 +45,17 @@ export default function LedgerPage() {
   const [endDate, setEndDate] = useState('');
   const [transactionType, setTransactionType] = useState('all');
 
-  // Modal State
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingEntry, setEditingEntry] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
-
-  // Form State for manual entry
-  const [form, setForm] = useState({
-    date: new Date().toISOString().split('T')[0],
-    payment: '',
-    purchase: '',
-    supplierName: '',
-    description: ''
-  });
-
   const currency = companyInfo?.currency || 'Rs';
 
   useEffect(() => {
     if (!companyId) return;
 
     setLoading(true);
+
+    // Fetch registered suppliers
+    getSuppliers(companyId)
+      .then((sups) => setDbSuppliers(sups))
+      .catch((err) => console.error('Failed to load suppliers:', err));
 
     // 1. Listen to manual Ledger entries
     const unsubLedger = listenLedgerEntries(
@@ -106,108 +99,122 @@ export default function LedgerPage() {
     };
   }, [companyId]);
 
-  // Consolidate all 3 sources (Purchases, Payments, and Manual Ledger Entries) by Date
+  // Consolidate all 3 sources (Purchases, Payments, and Manual Ledger Entries) as individual rows
   const combinedEntries = useMemo(() => {
-    const records = [];
+    const rows = [];
 
-    // Add Purchases
+    // Add Purchases as individual rows
     purchases.forEach((p) => {
-      const dateStr = p.createdAt
-        ? new Date(p.createdAt).toISOString().split('T')[0]
-        : new Date().toISOString().split('T')[0];
+      const ts = p.createdAt || Date.now();
+      const dateStr = new Date(ts).toISOString().split('T')[0];
 
-      records.push({
+      rows.push({
         id: `pur-${p.id}`,
         source: 'purchase',
         date: dateStr,
-        timestamp: p.createdAt || Date.now(),
+        timestamp: ts,
         payment: 0,
         purchase: Number(p.grandTotal) || 0,
         supplierName: p.supplierName || '',
-        description: `Stock Purchase ${p.reference ? `(${p.reference})` : ''}`,
+        description: `Stock Purchase ${p.reference ? `(${p.reference})` : ''} ${p.notes ? `- ${p.notes}` : ''}`.trim(),
         isEditable: false
       });
     });
 
-    // Add Payments
+    // Add Payments as individual rows
     payments.forEach((pay) => {
-      const dateStr = pay.createdAt
-        ? new Date(pay.createdAt).toISOString().split('T')[0]
-        : new Date().toISOString().split('T')[0];
+      const ts = pay.createdAt || Date.now();
+      const dateStr = new Date(ts).toISOString().split('T')[0];
 
-      records.push({
+      rows.push({
         id: `pay-${pay.id}`,
         source: 'payment',
         date: dateStr,
-        timestamp: pay.createdAt || Date.now(),
+        timestamp: ts,
         payment: Number(pay.amount) || 0,
         purchase: 0,
         supplierName: pay.supplierName || '',
-        description: `Supplier Payment ${pay.paymentMethod ? `via ${pay.paymentMethod}` : ''}`,
+        description: `Supplier Payment ${pay.paymentMethod ? `via ${pay.paymentMethod}` : ''} ${pay.reference ? `(${pay.reference})` : ''} ${pay.notes ? `- ${pay.notes}` : ''}`.trim(),
         isEditable: false
       });
     });
 
     // Add Manual Ledger Entries
     ledgerEntries.forEach((entry) => {
-      const dateStr = entry.date || new Date().toISOString().split('T')[0];
-      records.push({
-        id: entry.id,
-        source: 'manual',
-        date: dateStr,
-        timestamp: entry.createdAt || new Date(dateStr).getTime(),
-        payment: Number(entry.payment) || 0,
-        purchase: Number(entry.purchase) || 0,
-        supplierName: entry.supplierName || '',
-        description: entry.description || 'Manual Entry',
-        isEditable: true,
-        raw: entry
-      });
-    });
+      const ts = entry.createdAt || (entry.date ? new Date(entry.date).getTime() : Date.now());
+      const dateStr = entry.date || new Date(ts).toISOString().split('T')[0];
+      const purVal = Number(entry.purchase) || 0;
+      const payVal = Number(entry.payment) || 0;
 
-    // Group records by Date (so if both purchase & payment occurred on the same date, they consolidate smoothly)
-    const groupedByDate = {};
-
-    records.forEach((r) => {
-      if (!groupedByDate[r.date]) {
-        groupedByDate[r.date] = {
-          date: r.date,
-          timestamp: r.timestamp,
+      // If BOTH Purchase and Payment are entered in a single manual entry:
+      // Show Purchase on 1st row, Payment on 2nd row!
+      if (purVal > 0 && payVal > 0) {
+        rows.push({
+          id: `${entry.id}-pur`,
+          source: 'manual-pur',
+          date: dateStr,
+          timestamp: ts,
           payment: 0,
+          purchase: purVal,
+          supplierName: entry.supplierName || '',
+          description: entry.description ? `Purchase: ${entry.description}` : 'Manual Stock Purchase',
+          isEditable: true,
+          raw: entry
+        });
+        rows.push({
+          id: `${entry.id}-pay`,
+          source: 'manual-pay',
+          date: dateStr,
+          timestamp: ts + 1, // Purchase 1st row, Payment 2nd row
+          payment: payVal,
           purchase: 0,
-          details: [],
-          suppliers: new Set(),
-          hasEditable: false,
-          editableEntries: []
-        };
-      }
-
-      groupedByDate[r.date].payment += r.payment;
-      groupedByDate[r.date].purchase += r.purchase;
-      groupedByDate[r.date].details.push(r);
-      if (r.supplierName) groupedByDate[r.date].suppliers.add(r.supplierName);
-      if (r.isEditable) {
-        groupedByDate[r.date].hasEditable = true;
-        groupedByDate[r.date].editableEntries.push(r);
+          supplierName: entry.supplierName || '',
+          description: entry.description ? `Payment: ${entry.description}` : 'Manual Supplier Payment',
+          isEditable: true,
+          raw: entry
+        });
+      } else if (purVal > 0) {
+        rows.push({
+          id: entry.id,
+          source: 'manual',
+          date: dateStr,
+          timestamp: ts,
+          payment: 0,
+          purchase: purVal,
+          supplierName: entry.supplierName || '',
+          description: entry.description || 'Manual Stock Purchase',
+          isEditable: true,
+          raw: entry
+        });
+      } else {
+        rows.push({
+          id: entry.id,
+          source: 'manual',
+          date: dateStr,
+          timestamp: ts,
+          payment: payVal,
+          purchase: 0,
+          supplierName: entry.supplierName || '',
+          description: entry.description || 'Manual Supplier Payment',
+          isEditable: true,
+          raw: entry
+        });
       }
     });
 
-    // Convert grouped object to array and sort chronologically by date
-    const sortedGrouped = Object.values(groupedByDate).sort(
-      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-    );
-
-    return sortedGrouped;
+    // Sort rows chronologically by timestamp
+    return rows.sort((a, b) => a.timestamp - b.timestamp);
   }, [purchases, payments, ledgerEntries]);
 
-  // Supplier List for filtering
+  // Supplier List for filtering and modal dropdown
   const allSuppliers = useMemo(() => {
     const list = new Set();
+    dbSuppliers.forEach((s) => (s.name || s.supplierName) && list.add(s.name || s.supplierName));
     purchases.forEach((p) => p.supplierName && list.add(p.supplierName));
     payments.forEach((p) => p.supplierName && list.add(p.supplierName));
     ledgerEntries.forEach((e) => e.supplierName && list.add(e.supplierName));
     return Array.from(list).sort();
-  }, [purchases, payments, ledgerEntries]);
+  }, [dbSuppliers, purchases, payments, ledgerEntries]);
 
   const supplierOptions = useMemo(() => {
     const list = [{ value: 'all', label: `All Suppliers (${allSuppliers.length})` }];
@@ -232,29 +239,24 @@ export default function LedgerPage() {
     return combinedEntries.filter((row) => {
       // Filter Supplier
       if (selectedSupplier !== 'all') {
-        const hasSupplier = Array.from(row.suppliers).some((s) => s === selectedSupplier);
-        if (!hasSupplier) return false;
+        if (row.supplierName !== selectedSupplier) return false;
       }
 
       // Filter Transaction Type
-      if (transactionType === 'payment' && (row.totalPayment || 0) <= 0) return false;
-      if (transactionType === 'purchase' && (row.totalPurchase || 0) <= 0) return false;
+      if (transactionType === 'payment' && row.payment <= 0) return false;
+      if (transactionType === 'purchase' && row.purchase <= 0) return false;
 
-      // Filter Search Text (searches date string, formatted date, supplier, details, reference)
+      // Filter Search Text (searches date string, formatted date & time, supplier, description)
       if (search) {
         const q = search.toLowerCase();
-        const formattedStr = formatDate(row.date).toLowerCase();
-        const rawDateStr = row.date.toLowerCase();
-        const matchesDate = rawDateStr.includes(q) || formattedStr.includes(q);
-        const matchesSupplier = Array.from(row.suppliers).some((s) =>
-          s.toLowerCase().includes(q)
-        );
-        const matchesDetail = row.details.some(
-          (d) =>
-            d.description.toLowerCase().includes(q) ||
-            String(d.payment).includes(q) ||
-            String(d.purchase).includes(q)
-        );
+        const formattedDateStr = formatDate(row.date).toLowerCase();
+        const formattedDateTimeStr = formatDateTime(row.timestamp).toLowerCase();
+        const rawDateStr = (row.date || '').toLowerCase();
+        const matchesDate = rawDateStr.includes(q) || formattedDateStr.includes(q) || formattedDateTimeStr.includes(q);
+        const matchesSupplier = (row.supplierName || '').toLowerCase().includes(q);
+        const matchesDetail = (row.description || '').toLowerCase().includes(q) ||
+          String(row.payment).includes(q) ||
+          String(row.purchase).includes(q);
         if (!matchesDate && !matchesSupplier && !matchesDetail) return false;
       }
 
@@ -278,72 +280,6 @@ export default function LedgerPage() {
   // Final purchase amount still due: (Total Purchases - Total Payments)
   const finalAmountDue = totalPurchases - totalPayments;
 
-  // Add/Edit Manual Ledger Entry Modal handlers
-  const handleOpenAddModal = () => {
-    setEditingEntry(null);
-    setForm({
-      date: new Date().toISOString().split('T')[0],
-      payment: '',
-      purchase: '',
-      supplierName: '',
-      description: ''
-    });
-    setIsModalOpen(true);
-  };
-
-  const handleOpenEditModal = (rawEntry) => {
-    setEditingEntry(rawEntry);
-    setForm({
-      date: rawEntry.date || new Date().toISOString().split('T')[0],
-      payment: rawEntry.payment || '',
-      purchase: rawEntry.purchase || '',
-      supplierName: rawEntry.supplierName || '',
-      description: rawEntry.description || ''
-    });
-    setIsModalOpen(true);
-  };
-
-  const handleSubmitModal = async (e) => {
-    e.preventDefault();
-    const payNum = Number(form.payment) || 0;
-    const purNum = Number(form.purchase) || 0;
-
-    if (payNum <= 0 && purNum <= 0) {
-      toast.error('Please enter a Payment amount, a Purchase amount, or both.');
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      if (editingEntry) {
-        await updateLedgerEntry(companyId, editingEntry.id, form);
-        toast.success('Ledger entry updated successfully');
-      } else {
-        await createLedgerEntry(
-          companyId,
-          form,
-          currentUser?.uid,
-          userProfile?.name || 'User'
-        );
-        toast.success('New ledger entry recorded successfully');
-      }
-      setIsModalOpen(false);
-    } catch (err) {
-      toast.error(err.message || 'Failed to save entry');
-    }
-    setSubmitting(false);
-  };
-
-  const handleDeleteEntry = async (entryId) => {
-    if (!window.confirm('Are you sure you want to delete this manual ledger entry?')) return;
-    try {
-      await deleteLedgerEntry(companyId, entryId);
-      toast.success('Ledger entry deleted');
-    } catch (err) {
-      toast.error('Failed to delete entry');
-    }
-  };
-
   // Export CSV functionality
   const handleExportCSV = () => {
     if (filteredRows.length === 0) {
@@ -351,11 +287,10 @@ export default function LedgerPage() {
       return;
     }
 
-    let csvContent = 'Date,Payment,Purchase,Supplier,Details\n';
+    let csvContent = 'Date & Time,Payment,Purchase,Supplier,Details\n';
     filteredRows.forEach((r) => {
-      const suppliersStr = Array.from(r.suppliers).join('; ') || 'N/A';
-      const detailsStr = r.details.map((d) => d.description).join('; ') || '';
-      csvContent += `"${r.date}",${r.payment},${r.purchase},"${suppliersStr}","${detailsStr}"\n`;
+      const dtStr = formatDateTime(r.timestamp);
+      csvContent += `"${dtStr}",${r.payment},${r.purchase},"${r.supplierName || 'N/A'}","${r.description || ''}"\n`;
     });
 
     csvContent += `\n"TOTALS",${totalPayments},${totalPurchases},"",""\n`;
@@ -379,18 +314,13 @@ export default function LedgerPage() {
         <div className="page-header-left">
           <h1>General Ledger Sheet</h1>
           <p className="text-muted text-sm">
-            Excel-style 3-column financial ledger (Date, Payment, Purchase) with balance tracking
+            Excel-style 3-column financial ledger (Date & Time, Payment, Purchase) with detailed tracking
           </p>
         </div>
         <div className="page-header-actions" style={{ display: 'flex', gap: 'var(--space-2)' }}>
           <button className="btn btn-secondary" onClick={handleExportCSV}>
             <Download size={16} /> Export CSV
           </button>
-          {isAdmin && (
-            <button className="btn btn-primary" onClick={handleOpenAddModal}>
-              <Plus size={16} /> Record Ledger Entry
-            </button>
-          )}
         </div>
       </div>
 
@@ -493,7 +423,7 @@ export default function LedgerPage() {
             padding: 'var(--space-3) var(--space-4)',
             display: 'flex',
             alignItems: 'center',
-            justify: 'space-between'
+            justifyContent: 'space-between'
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontWeight: 600 }}>
@@ -530,9 +460,9 @@ export default function LedgerPage() {
               <thead style={{ position: 'sticky', top: 0, zIndex: 30 }}>
                 <tr style={{ background: '#f3f4f6', color: '#6b7280', fontSize: '11px', textAlign: 'center' }}>
                   <th style={{ border: '1px solid #e5e7eb', width: '50px', padding: '4px', position: 'sticky', top: 0, background: '#f3f4f6', zIndex: 30 }}>#</th>
-                  <th style={{ border: '1px solid #e5e7eb', width: '250px', padding: '4px', position: 'sticky', top: 0, background: '#f3f4f6', zIndex: 30 }}>A (DATE)</th>
-                  <th style={{ border: '1px solid #e5e7eb', width: '220px', padding: '4px', textAlign: 'right', position: 'sticky', top: 0, background: '#f3f4f6', zIndex: 30 }}>B (PAYMENT)</th>
-                  <th style={{ border: '1px solid #e5e7eb', width: '220px', padding: '4px', textAlign: 'right', position: 'sticky', top: 0, background: '#f3f4f6', zIndex: 30 }}>C (PURCHASE)</th>
+                  <th style={{ border: '1px solid #e5e7eb', width: '250px', padding: '4px', position: 'sticky', top: 0, background: '#f3f4f6', zIndex: 30 }}>A (DATE & TIME)</th>
+                  <th style={{ border: '1px solid #e5e7eb', width: '220px', padding: '4px', textAlign: 'right', position: 'sticky', top: 0, background: '#f3f4f6', zIndex: 30 }}>B (PURCHASE)</th>
+                  <th style={{ border: '1px solid #e5e7eb', width: '220px', padding: '4px', textAlign: 'right', position: 'sticky', top: 0, background: '#f3f4f6', zIndex: 30 }}>C (PAYMENT)</th>
                   <th style={{ border: '1px solid #e5e7eb', padding: '4px', textAlign: 'left', position: 'sticky', top: 0, background: '#f3f4f6', zIndex: 30 }}>SUPPLIER / DETAILS</th>
                   {isAdmin && <th style={{ border: '1px solid #e5e7eb', width: '90px', padding: '4px', textAlign: 'center', position: 'sticky', top: 0, background: '#f3f4f6', zIndex: 30 }}>ACTION</th>}
                 </tr>
@@ -542,14 +472,14 @@ export default function LedgerPage() {
                   <th style={{ border: '1px solid #e5e7eb', textAlign: 'center', position: 'sticky', top: '25px', background: '#f9fafb', zIndex: 30 }}>#</th>
                   <th style={{ border: '1px solid #e5e7eb', fontSize: '13px', fontWeight: 700, color: '#111827', position: 'sticky', top: '25px', background: '#f9fafb', zIndex: 30 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <Calendar size={14} style={{ color: '#4b5563' }} /> Date
+                      <Calendar size={14} style={{ color: '#4b5563' }} /> Date & Time
                     </div>
-                  </th>
-                  <th style={{ border: '1px solid #e5e7eb', fontSize: '13px', fontWeight: 700, color: '#059669', textAlign: 'right', position: 'sticky', top: '25px', background: '#f9fafb', zIndex: 30 }}>
-                    Payment ({currency})
                   </th>
                   <th style={{ border: '1px solid #e5e7eb', fontSize: '13px', fontWeight: 700, color: '#2563eb', textAlign: 'right', position: 'sticky', top: '25px', background: '#f9fafb', zIndex: 30 }}>
                     Purchase ({currency})
+                  </th>
+                  <th style={{ border: '1px solid #e5e7eb', fontSize: '13px', fontWeight: 700, color: '#059669', textAlign: 'right', position: 'sticky', top: '25px', background: '#f9fafb', zIndex: 30 }}>
+                    Payment ({currency})
                   </th>
                   <th style={{ border: '1px solid #e5e7eb', fontSize: '13px', fontWeight: 700, color: '#111827', position: 'sticky', top: '25px', background: '#f9fafb', zIndex: 30 }}>
                     Supplier & Transaction Details
@@ -561,11 +491,9 @@ export default function LedgerPage() {
               <tbody>
                 {filteredRows.length > 0 ? (
                   filteredRows.map((row, idx) => {
-                    const supplierText = Array.from(row.suppliers).join(', ');
-
                     return (
                       <tr
-                        key={row.date + idx}
+                        key={row.id + idx}
                         style={{
                           background: idx % 2 === 0 ? '#ffffff' : '#f9fafb',
                           transition: 'background-color 0.15s ease'
@@ -585,7 +513,7 @@ export default function LedgerPage() {
                           {idx + 1}
                         </td>
 
-                        {/* COLUMN A: DATE */}
+                        {/* COLUMN A: DATE & TIME */}
                         <td
                           style={{
                             border: '1px solid #e5e7eb',
@@ -595,25 +523,10 @@ export default function LedgerPage() {
                             whiteSpace: 'nowrap'
                           }}
                         >
-                          {formatDate(row.date)}
+                          {formatDateTime(row.timestamp)}
                         </td>
 
-                        {/* COLUMN B: PAYMENT */}
-                        <td
-                          style={{
-                            border: '1px solid #e5e7eb',
-                            textAlign: 'right',
-                            fontWeight: row.payment > 0 ? 600 : 400,
-                            color: row.payment > 0 ? '#059669' : '#9ca3af',
-                            fontFamily: 'monospace',
-                            fontSize: '13px',
-                            background: row.payment > 0 ? '#f0fdf4' : 'transparent'
-                          }}
-                        >
-                          {row.payment > 0 ? formatCurrency(row.payment, currency) : '—'}
-                        </td>
-
-                        {/* COLUMN C: PURCHASE */}
+                        {/* COLUMN B: PURCHASE */}
                         <td
                           style={{
                             border: '1px solid #e5e7eb',
@@ -628,47 +541,54 @@ export default function LedgerPage() {
                           {row.purchase > 0 ? formatCurrency(row.purchase, currency) : '—'}
                         </td>
 
+                        {/* COLUMN C: PAYMENT */}
+                        <td
+                          style={{
+                            border: '1px solid #e5e7eb',
+                            textAlign: 'right',
+                            fontWeight: row.payment > 0 ? 600 : 400,
+                            color: row.payment > 0 ? '#059669' : '#9ca3af',
+                            fontFamily: 'monospace',
+                            fontSize: '13px',
+                            background: row.payment > 0 ? '#f0fdf4' : 'transparent'
+                          }}
+                        >
+                          {row.payment > 0 ? formatCurrency(row.payment, currency) : '—'}
+                        </td>
+
                         {/* SUPPLIER & DETAILS */}
                         <td style={{ border: '1px solid #e5e7eb', fontSize: '13px', color: '#374151' }}>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                            {supplierText && (
+                            {row.supplierName && (
                               <span style={{ fontWeight: 600, color: '#111827' }}>
-                                Supplier: {supplierText}
+                                Supplier: {row.supplierName}
                               </span>
                             )}
-                            <div className="text-xs text-muted">
-                              {row.details.map((d, i) => (
-                                <span key={i} style={{ marginRight: '8px' }}>
-                                  • {d.description} {d.purchase > 0 ? `(Purchase: ${formatCurrency(d.purchase, currency)})` : ''} {d.payment > 0 ? `(Payment: ${formatCurrency(d.payment, currency)})` : ''}
-                                </span>
-                              ))}
-                            </div>
+                            <span className="text-xs text-muted">
+                              {row.description}
+                            </span>
                           </div>
                         </td>
 
                         {/* ACTIONS FOR EDITABLE MANUAL ENTRIES */}
                         {isAdmin && (
                           <td style={{ border: '1px solid #e5e7eb', textAlign: 'center' }}>
-                            {row.hasEditable ? (
+                            {row.isEditable ? (
                               <div style={{ display: 'flex', justifyContent: 'center', gap: '4px' }}>
-                                {row.editableEntries.map((editable) => (
-                                  <div key={editable.id} style={{ display: 'flex', gap: '2px' }}>
-                                    <button
-                                      className="btn btn-ghost btn-xs"
-                                      onClick={() => handleOpenEditModal(editable.raw)}
-                                      title="Edit manual entry"
-                                    >
-                                      <Edit size={12} />
-                                    </button>
-                                    <button
-                                      className="btn btn-ghost btn-xs text-danger"
-                                      onClick={() => handleDeleteEntry(editable.id)}
-                                      title="Delete manual entry"
-                                    >
-                                      <Trash2 size={12} />
-                                    </button>
-                                  </div>
-                                ))}
+                                <button
+                                  className="btn btn-ghost btn-xs"
+                                  onClick={() => handleOpenEditModal(row.raw)}
+                                  title="Edit manual entry"
+                                >
+                                  <Edit size={12} />
+                                </button>
+                                <button
+                                  className="btn btn-ghost btn-xs text-danger"
+                                  onClick={() => handleDeleteEntry(row.raw.id)}
+                                  title="Delete manual entry"
+                                >
+                                  <Trash2 size={12} />
+                                </button>
                               </div>
                             ) : (
                               <span className="text-xs text-muted">—</span>
@@ -685,13 +605,8 @@ export default function LedgerPage() {
                         <BookOpen size={32} style={{ color: 'var(--gray-400)', marginBottom: 'var(--space-2)' }} />
                         <h3>No Ledger Entries Found</h3>
                         <p className="text-muted">
-                          Purchases and Payments will automatically populate here. You can also record entries manually.
+                          Purchases and Payments will automatically populate here.
                         </p>
-                        {isAdmin && (
-                          <button className="btn btn-primary mt-3" onClick={handleOpenAddModal}>
-                            <Plus size={16} /> Add Manual Entry
-                          </button>
-                        )}
                       </div>
                     </td>
                   </tr>
@@ -711,21 +626,6 @@ export default function LedgerPage() {
                       border: '1px solid #d1d5db',
                       textAlign: 'right',
                       fontSize: '14px',
-                      color: '#059669',
-                      fontFamily: 'monospace',
-                      background: '#dcfce7',
-                      position: 'sticky',
-                      bottom: '46px',
-                      zIndex: 40
-                    }}
-                  >
-                    {formatCurrency(totalPayments, currency)}
-                  </td>
-                  <td
-                    style={{
-                      border: '1px solid #d1d5db',
-                      textAlign: 'right',
-                      fontSize: '14px',
                       color: '#2563eb',
                       fontFamily: 'monospace',
                       background: '#dbeafe',
@@ -736,8 +636,23 @@ export default function LedgerPage() {
                   >
                     {formatCurrency(totalPurchases, currency)}
                   </td>
+                  <td
+                    style={{
+                      border: '1px solid #d1d5db',
+                      textAlign: 'right',
+                      fontSize: '14px',
+                      color: '#059669',
+                      fontFamily: 'monospace',
+                      background: '#dcfce7',
+                      position: 'sticky',
+                      bottom: '46px',
+                      zIndex: 40
+                    }}
+                  >
+                    {formatCurrency(totalPayments, currency)}
+                  </td>
                   <td colSpan={isAdmin ? 2 : 1} style={{ border: '1px solid #d1d5db', fontSize: '12px', color: '#4b5563', position: 'sticky', bottom: '46px', background: '#f3f4f6', zIndex: 40 }}>
-                    Sum of Payments (Col B) & Sum of Purchases (Col C)
+                    Sum of Purchases & Sum of Payments
                   </td>
                 </tr>
 
@@ -804,116 +719,6 @@ export default function LedgerPage() {
         </div>
       </div>
 
-      {/* CREATE / EDIT MANUAL LEDGER ENTRY MODAL */}
-      {isModalOpen && (
-        <div className="modal-overlay" onClick={() => setIsModalOpen(false)}>
-          <div
-            className="modal"
-            style={{ maxWidth: 520 }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="modal-header">
-              <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                <BookOpen size={18} style={{ color: 'var(--primary-600)' }} />
-                {editingEntry ? 'Edit Ledger Entry' : 'Record Ledger Entry'}
-              </h3>
-              <button className="modal-close" onClick={() => setIsModalOpen(false)}>
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmitModal}>
-              <div className="modal-body form-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
-                
-                {/* Date */}
-                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                  <label className="form-label">Transaction Date *</label>
-                  <input
-                    type="date"
-                    className="form-input"
-                    value={form.date}
-                    onChange={(e) => setForm({ ...form, date: e.target.value })}
-                  />
-                </div>
-
-                {/* Payment Amount */}
-                <div className="form-group">
-                  <label className="form-label" style={{ color: '#059669' }}>
-                    Payment Amount ({currency})
-                  </label>
-                  <input
-                    type="number"
-                    className="form-input"
-                    placeholder="0"
-                    value={form.payment}
-                    onChange={(e) => setForm({ ...form, payment: e.target.value })}
-                  />
-                  <span className="form-hint">Amount paid to supplier</span>
-                </div>
-
-                {/* Purchase Amount */}
-                <div className="form-group">
-                  <label className="form-label" style={{ color: '#2563eb' }}>
-                    Purchase Amount ({currency})
-                  </label>
-                  <input
-                    type="number"
-                    className="form-input"
-                    placeholder="0"
-                    value={form.purchase}
-                    onChange={(e) => setForm({ ...form, purchase: e.target.value })}
-                  />
-                  <span className="form-hint">Amount of stock purchased</span>
-                </div>
-
-                {/* Supplier Name */}
-                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                  <label className="form-label">
-                    Supplier Name <span className="text-muted font-normal">(Optional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="e.g. Acme Supplies, Global Traders"
-                    value={form.supplierName}
-                    onChange={(e) => setForm({ ...form, supplierName: e.target.value })}
-                  />
-                </div>
-
-                {/* Description */}
-                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                  <label className="form-label">
-                    Description / Note <span className="text-muted font-normal">(Optional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="e.g., Partial cash payment, Invoice #402"
-                    value={form.description}
-                    onChange={(e) => setForm({ ...form, description: e.target.value })}
-                  />
-                </div>
-
-              </div>
-
-              <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => setIsModalOpen(false)}
-                  disabled={submitting}
-                >
-                  Cancel
-                </button>
-                <button type="submit" className="btn btn-primary" disabled={submitting}>
-                  {submitting ? <span className="loading-spinner" /> : <Save size={16} />}
-                  {editingEntry ? 'Save Changes' : 'Record Entry'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

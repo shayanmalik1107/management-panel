@@ -44,10 +44,20 @@ export default function BillingPage() {
   const startDateStr = sub.startDate ? new Date(sub.startDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A';
   const expiryDateStr = sub.expiryDate ? new Date(sub.expiryDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A';
 
-  const daysRemaining = useMemo(() => {
-    if (!sub.expiryDate) return 30;
-    return Math.max(0, Math.ceil((sub.expiryDate - Date.now()) / (1000 * 60 * 60 * 24)));
-  }, [sub.expiryDate]);
+  const { currentDay, daysRemaining, isExpired } = useMemo(() => {
+    if (!sub.startDate && !sub.expiryDate) {
+      return { currentDay: 1, daysRemaining: 30, isExpired: false };
+    }
+    const now = Date.now();
+    const realElapsedDays = sub.startDate ? Math.max(0, Math.floor((now - sub.startDate) / (1000 * 60 * 60 * 24))) : 0;
+    const totalDaysPassed = realElapsedDays + (sub.extraDaysPassed || 0);
+    const currDay = Math.min(30, totalDaysPassed + 1);
+    const remDays = sub.expiryDate
+      ? Math.max(0, Math.ceil((sub.expiryDate - now) / (1000 * 60 * 60 * 24)) - (sub.extraDaysPassed || 0))
+      : Math.max(0, 30 - totalDaysPassed);
+    const expired = sub.status === 'expired' || remDays <= 0 || (sub.expiryDate && (now + ((sub.extraDaysPassed || 0) * 86400000)) >= sub.expiryDate);
+    return { currentDay: currDay, daysRemaining: remDays, isExpired: expired };
+  }, [sub]);
 
   const maxComp = userProfile?.maxCompanies || userProfile?.package?.maxCompanies || 1;
 
@@ -206,6 +216,7 @@ export default function BillingPage() {
             {daysRemaining} <span style={{ fontSize: 14, color: '#64748b', fontWeight: 600 }}>Days Left</span>
           </div>
           <div style={{ borderTop: '1px solid #f1f5f9', marginTop: 12, paddingTop: 12, fontSize: 12, color: '#475569', display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div>Current Progress: <strong style={{ color: '#2563eb' }}>Day {currentDay} of 30</strong></div>
             <div>Started: <strong>{startDateStr}</strong></div>
             <div>Expires On: <strong style={{ color: '#0f172a' }}>{expiryDateStr}</strong></div>
           </div>

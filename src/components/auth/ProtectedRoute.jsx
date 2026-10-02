@@ -61,7 +61,14 @@ export function ProtectedRoute({ children }) {
 
     // Subscription Expiry Check
     const sub = userProfile.subscription;
-    const isExpired = sub && (sub.status === 'expired' || (sub.expiryDate && Date.now() > sub.expiryDate));
+    const now = Date.now();
+    const realElapsedDays = sub?.startDate ? Math.max(0, Math.floor((now - sub.startDate) / (1000 * 60 * 60 * 24))) : 0;
+    const totalDaysPassed = realElapsedDays + (sub?.extraDaysPassed || 0);
+    const daysRemaining = sub?.expiryDate
+      ? Math.max(0, Math.ceil((sub.expiryDate - now) / (1000 * 60 * 60 * 24)) - (sub?.extraDaysPassed || 0))
+      : Math.max(0, 30 - totalDaysPassed);
+
+    const isExpired = sub && (sub.status === 'expired' || daysRemaining <= 0 || (sub.expiryDate && (now + ((sub.extraDaysPassed || 0) * 86400000)) >= sub.expiryDate));
 
     if (isExpired && !isPackageRoute && !isPaymentPendingRoute && !isControlPanelRoute) {
       const expDateStr = sub.expiryDate ? new Date(sub.expiryDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Expired Date';

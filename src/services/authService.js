@@ -68,13 +68,16 @@ export function calculateProratedUpgrade(userProfile) {
 
   const now = Date.now();
   const sub = userProfile?.subscription || {};
-  const expiryDate = sub.expiryDate || (now + 30 * 24 * 60 * 60 * 1000);
 
   // Standard billing cycle is 30 days
   const totalDays = 30;
 
-  // Remaining days in subscription
-  const remainingDays = Math.min(30, Math.max(0, Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24))));
+  // Remaining days in subscription taking real time + extraDaysPassed into account
+  const realElapsedDays = sub.startDate ? Math.max(0, Math.floor((now - sub.startDate) / (1000 * 60 * 60 * 24))) : 0;
+  const totalDaysPassed = realElapsedDays + (sub.extraDaysPassed || 0);
+  const remainingDays = sub.expiryDate
+    ? Math.max(0, Math.ceil((sub.expiryDate - now) / (1000 * 60 * 60 * 24)) - (sub.extraDaysPassed || 0))
+    : Math.max(0, totalDays - totalDaysPassed);
 
   // Basic daily rate = 5000 / 30 = Rs 166.666... per day
   const basicPrice = 5000;

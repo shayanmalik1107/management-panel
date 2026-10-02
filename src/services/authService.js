@@ -196,12 +196,8 @@ export async function approveUserAccount(uid, maxCompaniesOverride = null, planI
 
   const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
   const now = Date.now();
-  const existingSub = userData.subscription || {};
 
-  // Preserve existing unexpired date or extend 30 days
-  const baseExpiry = (existingSub.expiryDate && existingSub.expiryDate > now)
-    ? existingSub.expiryDate
-    : (now + thirtyDaysMs);
+  const baseExpiry = now + thirtyDaysMs;
 
   const updates = {};
   updates[`users/${uid}/accountStatus`] = 'active';
@@ -215,9 +211,9 @@ export async function approveUserAccount(uid, maxCompaniesOverride = null, planI
   updates[`users/${uid}/package/maxCompanies`] = finalLimit;
   updates[`users/${uid}/upgradeRequest`] = null;
 
-  // Save subscription dates
+  // Save subscription dates (starting from now, expires 30 days from now)
   updates[`users/${uid}/subscription`] = {
-    startDate: existingSub.startDate || now,
+    startDate: now,
     expiryDate: baseExpiry,
     planId: finalPlan,
     price: isBasic ? 5000 : 10000,

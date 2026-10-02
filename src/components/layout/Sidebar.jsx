@@ -16,6 +16,7 @@ import {
   LogOut,
   ChevronLeft,
   Building2,
+  Sparkles,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { logout } from '../../services/authService';
@@ -53,8 +54,9 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
       { to: '/payments', icon: CreditCard, label: 'Payments' },
       { to: '/ledger', icon: BookOpen, label: 'Ledger' },
     ]},
-    { section: 'TEAM', items: [
+    { section: 'TEAM & ACCOUNT', items: [
       { to: '/employees', icon: Users, label: 'Employees' },
+      { to: '/billing', icon: Sparkles, label: 'Subscription & Billing' },
     ]},
     { section: 'ANALYTICS', items: [
       { to: '/reports', icon: BarChart3, label: 'Reports' },

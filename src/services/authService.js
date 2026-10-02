@@ -38,15 +38,18 @@ export async function registerAdmin({ name, email, password, phone, useGoogle = 
   // Update display name
   await updateProfile(user, { displayName: name || user.displayName });
 
-  // Create user record without companyId initially
+  // Create user record with initial accountStatus 'select_package'
   const updates = {};
   updates[`users/${uid}`] = {
     name: name || user.displayName || '',
     email: user.email,
     role: 'admin',
-    companyId: null, // Will be set when they create the company
+    companyId: null, // Will be set when they create a company
     phone: phone || '',
     status: 'active',
+    accountStatus: 'select_package', // New admins must select a package first
+    package: null,
+    maxCompanies: 0,
     createdAt: Date.now(),
   };
 
@@ -54,6 +57,229 @@ export async function registerAdmin({ name, email, password, phone, useGoogle = 
   await update(dbRef, updates);
 
   return { uid };
+}
+
+/**
+ * Calculate Prorated Upgrade Math (Basic -> Pro)
+ */
+export function calculateProratedUpgrade(userProfile) {
+  const currentPlanId = userProfile?.package?.planId || 'basic';
+  const isBasic = currentPlanId === 'basic';
+
+  const now = Date.now();
+  const sub = userProfile?.subscription || {};
+  const expiryDate = sub.expiryDate || (now + 30 * 24 * 60 * 60 * 1000);
+
+  // Standard billing cycle is 30 days
+  const totalDays = 30;
+
+  // Remaining days in subscription
+  const remainingDays = Math.min(30, Math.max(0, Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24))));
+
+  // Basic daily rate = 5000 / 30 = Rs 166.666... per day
+  const basicPrice = 5000;
+  const basicDailyRate = basicPrice / totalDays;
+
+  // Unused Basic Credit = daily rate * remaining days
+  const unusedBasicCredit = Math.round(basicDailyRate * remainingDays);
+
+  // Pro Price = 10,000
+  const proPrice = 10000;
+
+  // Prorated Charge = 10,000 - unusedBasicCredit
+  const proratedCharge = Math.max(0, proPrice - unusedBasicCredit);
+
+  return {
+    isProrated: isBasic && remainingDays > 0,
+    totalDays,
+    remainingDays,
+    basicDailyRate: Number(basicDailyRate.toFixed(2)),
+    unusedBasicCredit,
+    proPrice,
+    proratedCharge,
+    nextMonthPrice: 10000,
+  };
+}
+
+/**
+ * Select Package for Admin
+ */
+export async function selectUserPackage(uid, planId) {
+  const isBasic = planId === 'basic';
+  const packageData = {
+    planId: isBasic ? 'basic' : 'pro',
+    name: isBasic ? 'Basic Package' : 'Pro Multi-Company Package',
+    price: isBasic ? 5000 : 10000,
+    maxCompanies: isBasic ? 1 : 3,
+    status: 'pending_payment',
+    selectedAt: Date.now(),
+  };
+
+  const updates = {};
+  updates[`users/${uid}/package`] = packageData;
+  updates[`users/${uid}/accountStatus`] = 'pending_approval';
+  updates[`users/${uid}/maxCompanies`] = packageData.maxCompanies;
+
+  const dbRef = ref(database);
+  await update(dbRef, updates);
+  return packageData;
+}
+
+/**
+ * Request Plan Upgrade with Proration calculation
+ */
+export async function requestPlanUpgrade(uid, targetPlanId, userProfile = null) {
+  const isPro = targetPlanId === 'pro';
+  const targetMaxCompanies = isPro ? 3 : 1;
+
+  let prorated = null;
+  if (userProfile && targetPlanId === 'pro' && userProfile?.package?.planId === 'basic') {
+    prorated = calculateProratedUpgrade(userProfile);
+  }
+
+  const updates = {};
+  updates[`users/${uid}/upgradeRequest`] = {
+    requestedPlanId: targetPlanId,
+    requestedPackageName: isPro ? 'Pro Multi-Company Package' : 'Basic Package Renewal',
+    requestedPrice: prorated ? prorated.proratedCharge : (isPro ? 10000 : 5000),
+    requestedMaxCompanies: targetMaxCompanies,
+    prorated: isPro ? (prorated || null) : null,
+    requestedAt: Date.now(),
+    status: 'pending',
+  };
+
+  const dbRef = ref(database);
+  await update(dbRef, updates);
+}
+
+/**
+ * Schedule Plan Downgrade to Basic at end of Pro period
+ */
+export async function schedulePlanDowngrade(uid, targetPlanId = 'basic') {
+  const updates = {};
+  updates[`users/${uid}/scheduledDowngrade`] = {
+    targetPlanId,
+    targetMaxCompanies: 1,
+    scheduledAt: Date.now(),
+    status: 'scheduled',
+  };
+
+  const dbRef = ref(database);
+  await update(dbRef, updates);
+}
+
+/**
+ * Cancel Scheduled Downgrade
+ */
+export async function cancelScheduledDowngrade(uid) {
+  const updates = {};
+  updates[`users/${uid}/scheduledDowngrade`] = null;
+
+  const dbRef = ref(database);
+  await update(dbRef, updates);
+}
+
+/**
+ * Super Admin Control Panel: Approve User Account
+ */
+export async function approveUserAccount(uid, maxCompaniesOverride = null, planIdOverride = null) {
+  const userRef = ref(database, `users/${uid}`);
+  const snap = await get(userRef);
+  if (!snap.exists()) throw new Error('User record not found');
+
+  const userData = snap.val();
+  const currentPlan = userData.package?.planId || 'basic';
+  const finalPlan = planIdOverride || currentPlan;
+  const isBasic = finalPlan === 'basic';
+  const defaultLimit = isBasic ? 1 : 3;
+  const finalLimit = Number(maxCompaniesOverride) > 0 ? Number(maxCompaniesOverride) : defaultLimit;
+
+  const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+  const now = Date.now();
+  const existingSub = userData.subscription || {};
+
+  // Preserve existing unexpired date or extend 30 days
+  const baseExpiry = (existingSub.expiryDate && existingSub.expiryDate > now)
+    ? existingSub.expiryDate
+    : (now + thirtyDaysMs);
+
+  const updates = {};
+  updates[`users/${uid}/accountStatus`] = 'active';
+  updates[`users/${uid}/approvalStatus`] = 'approved';
+  updates[`users/${uid}/maxCompanies`] = finalLimit;
+  updates[`users/${uid}/approvedAt`] = now;
+  updates[`users/${uid}/package/status`] = 'active';
+  updates[`users/${uid}/package/planId`] = finalPlan;
+  updates[`users/${uid}/package/name`] = isBasic ? 'Basic Package' : 'Pro Multi-Company Package';
+  updates[`users/${uid}/package/price`] = isBasic ? 5000 : 10000;
+  updates[`users/${uid}/package/maxCompanies`] = finalLimit;
+  updates[`users/${uid}/upgradeRequest`] = null;
+
+  // Save subscription dates
+  updates[`users/${uid}/subscription`] = {
+    startDate: existingSub.startDate || now,
+    expiryDate: baseExpiry,
+    planId: finalPlan,
+    price: isBasic ? 5000 : 10000,
+    status: 'active',
+    lastApprovedAt: now,
+  };
+
+  const dbRef = ref(database);
+  await update(dbRef, updates);
+}
+
+/**
+ * Super Admin Control Panel: Add 1 Month to Subscription
+ */
+export async function addSubscriptionMonth(uid) {
+  const userRef = ref(database, `users/${uid}`);
+  const snap = await get(userRef);
+  if (!snap.exists()) throw new Error('User not found');
+
+  const userData = snap.val();
+  const sub = userData.subscription || {};
+  const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+  const now = Date.now();
+
+  const currentExpiry = (sub.expiryDate && sub.expiryDate > now) ? sub.expiryDate : now;
+  const newExpiry = currentExpiry + thirtyDaysMs;
+
+  const updates = {};
+  updates[`users/${uid}/subscription/startDate`] = sub.startDate || now;
+  updates[`users/${uid}/subscription/expiryDate`] = newExpiry;
+  updates[`users/${uid}/subscription/status`] = 'active';
+  updates[`users/${uid}/accountStatus`] = 'active';
+  updates[`users/${uid}/package/status`] = 'active';
+
+  const dbRef = ref(database);
+  await update(dbRef, updates);
+}
+
+/**
+ * Super Admin Control Panel: Update User Company Limit
+ */
+export async function updateUserCompanyLimit(uid, maxCompanies) {
+  const limit = Math.max(1, parseInt(maxCompanies, 10) || 1);
+  const updates = {};
+  updates[`users/${uid}/maxCompanies`] = limit;
+  updates[`users/${uid}/package/maxCompanies`] = limit;
+
+  const dbRef = ref(database);
+  await update(dbRef, updates);
+}
+
+/**
+ * Super Admin Control Panel: Reject / Suspend User Account
+ */
+export async function rejectUserAccount(uid, reason = '') {
+  const updates = {};
+  updates[`users/${uid}/accountStatus`] = 'disabled';
+  updates[`users/${uid}/approvalStatus`] = 'rejected';
+  updates[`users/${uid}/rejectionReason`] = reason;
+
+  const dbRef = ref(database);
+  await update(dbRef, updates);
 }
 
 /**
@@ -96,7 +322,7 @@ export async function setupCompany(companyName, uid, userEmail, userName, phone)
     currencyCode: 'PKR',
     timezone: 'Asia/Karachi',
     joinCode: joinCode,
-    status: 'pending',
+    status: 'active',
     createdAt: Date.now(),
   };
 
@@ -259,7 +485,7 @@ export async function loginWithGoogle() {
 export async function logout() {
   try {
     sessionStorage.clear();
-  } catch (e) {}
+  } catch (e) { }
   await signOut(auth);
 }
 

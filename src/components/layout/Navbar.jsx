@@ -1,11 +1,12 @@
 // Navbar Component — Mobile Responsive
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Menu, Search, Bell, Plus, ChevronDown, Building, X } from 'lucide-react';
+import { Menu, Search, Bell, Plus, ChevronDown, Building, X, Sparkles } from 'lucide-react';
 import { ref, onValue, query, orderByChild, equalTo, limitToLast, update, get } from 'firebase/database';
 import { database } from '../../firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import { timeAgo } from '../../utils/formatters';
+import MaxPlanUpgradeModal from '../common/MaxPlanUpgradeModal';
 
 export default function Navbar({ onToggleSidebar, onToggleMobile }) {
   const { userProfile, companyInfo, companyId, isAdmin, currentUser } = useAuth();
@@ -17,6 +18,7 @@ export default function Navbar({ onToggleSidebar, onToggleMobile }) {
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [showCompanySwitcher, setShowCompanySwitcher] = useState(false);
   const [userCompanies, setUserCompanies] = useState([]);
+  const [showMaxUpgradeModal, setShowMaxUpgradeModal] = useState(false);
   
   const notifRef = useRef(null);
   const quickAddRef = useRef(null);
@@ -166,73 +168,132 @@ export default function Navbar({ onToggleSidebar, onToggleMobile }) {
           <Menu size={20} />
         </button>
 
-        {isAdmin && (
-          <div className="dropdown navbar-company-switcher" ref={switcherRef}>
-            <button
-              className="btn btn-ghost navbar-company-btn"
-              onClick={() => setShowCompanySwitcher(!showCompanySwitcher)}
-            >
-              <Building size={16} className="text-primary-600" />
-              <span className="navbar-company-name">{companyInfo?.name || 'Select Company'}</span>
-              <ChevronDown size={14} className="text-muted" />
-            </button>
-            {showCompanySwitcher && (
-              <div className="dropdown-menu" style={{ width: 250, left: 0, top: '100%', marginTop: '4px' }}>
-                <div style={{ padding: '8px 12px', fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', color: 'var(--gray-500)', letterSpacing: '0.5px' }}>
-                  Your Companies
-                </div>
-                {userCompanies.map(comp => {
-                  const isClosed = comp.status === 'closed' || comp.status === 'disabled';
-                  return (
-                    <button
-                      key={comp.id}
-                      className="dropdown-item"
-                      style={{
-                        fontWeight: comp.id === companyId ? 600 : 400,
-                        background: comp.id === companyId ? 'var(--gray-50)' : 'transparent',
-                        opacity: isClosed ? 0.7 : 1,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        width: '100%',
-                      }}
-                      onClick={async () => {
-                        if (isClosed) {
-                          alert('This company workspace is closed by System Control.');
-                          return;
-                        }
-                        await update(ref(database, `users/${userProfile.uid}`), { companyId: comp.id });
-                        setShowCompanySwitcher(false);
-                        window.location.href = '/dashboard';
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <Building size={14} style={{ opacity: comp.id === companyId ? 1 : 0.5, color: comp.id === companyId ? 'var(--primary-600)' : 'inherit' }} />
-                        <span>{comp.name}</span>
-                      </div>
-                      {isClosed && (
-                        <span style={{ fontSize: 10, fontWeight: 700, color: '#ef4444', background: '#fee2e2', padding: '1px 6px', borderRadius: 4 }}>
-                          Closed
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-                <div style={{ borderTop: '1px solid var(--gray-100)', margin: '4px 0' }}></div>
-                <button
-                  className="dropdown-item"
-                  style={{ color: 'var(--primary-600)', fontWeight: 500 }}
-                  onClick={() => {
-                    navigate('/setup');
-                    setShowCompanySwitcher(false);
-                  }}
-                >
-                  <Plus size={14} /> Create New Company
-                </button>
+        {isAdmin && (() => {
+          const ownedCount = userCompanies.length;
+          const maxComp = userProfile?.maxCompanies || userProfile?.package?.maxCompanies || 1;
+          const isLimitReached = ownedCount >= maxComp;
+          const planName = userProfile?.package?.name || (userProfile?.package?.planId === 'pro' ? 'Pro Plan' : 'Basic Plan');
+          const isPro = userProfile?.package?.planId === 'pro' || maxComp > 1;
+
+          return (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {/* Plan Badge */}
+              <div
+                onClick={() => {
+                  if (isLimitReached && (maxComp >= 3 || userProfile?.package?.planId === 'pro')) {
+                    setShowMaxUpgradeModal(true);
+                  } else {
+                    navigate('/billing');
+                  }
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  padding: '4px 10px',
+                  borderRadius: 16,
+                  background: isPro ? '#eff6ff' : '#f8fafc',
+                  border: isPro ? '1px solid #bfdbfe' : '1px solid #cbd5e1',
+                  color: isPro ? '#1d4ed8' : '#475569',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+                title="Click to view subscription plan details"
+              >
+                <Sparkles size={13} color={isPro ? '#2563eb' : '#64748b'} />
+                <span>{planName} ({ownedCount}/{maxComp})</span>
               </div>
-            )}
-          </div>
-        )}
+
+              {/* Company Switcher Dropdown */}
+              <div className="dropdown navbar-company-switcher" ref={switcherRef}>
+                <button
+                  className="btn btn-ghost navbar-company-btn"
+                  onClick={() => setShowCompanySwitcher(!showCompanySwitcher)}
+                >
+                  <Building size={16} className="text-primary-600" />
+                  <span className="navbar-company-name">{companyInfo?.name || 'Select Company'}</span>
+                  <ChevronDown size={14} className="text-muted" />
+                </button>
+                {showCompanySwitcher && (
+                  <div className="dropdown-menu" style={{ width: 260, left: 0, top: '100%', marginTop: '4px' }}>
+                    <div style={{ padding: '8px 12px', fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', color: 'var(--gray-500)', letterSpacing: '0.5px' }}>
+                      Your Companies ({ownedCount}/{maxComp})
+                    </div>
+                    {userCompanies.map(comp => {
+                      const isClosed = comp.status === 'closed' || comp.status === 'disabled';
+                      return (
+                        <button
+                          key={comp.id}
+                          className="dropdown-item"
+                          style={{
+                            fontWeight: comp.id === companyId ? 600 : 400,
+                            background: comp.id === companyId ? 'var(--gray-50)' : 'transparent',
+                            opacity: isClosed ? 0.7 : 1,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            width: '100%',
+                          }}
+                          onClick={async () => {
+                            if (isClosed) {
+                              alert('This company workspace is closed by System Control.');
+                              return;
+                            }
+                            await update(ref(database, `users/${userProfile.uid}`), { companyId: comp.id });
+                            setShowCompanySwitcher(false);
+                            window.location.href = '/dashboard';
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <Building size={14} style={{ opacity: comp.id === companyId ? 1 : 0.5, color: comp.id === companyId ? 'var(--primary-600)' : 'inherit' }} />
+                            <span>{comp.name}</span>
+                          </div>
+                          {isClosed && (
+                            <span style={{ fontSize: 10, fontWeight: 700, color: '#ef4444', background: '#fee2e2', padding: '1px 6px', borderRadius: 4 }}>
+                              Closed
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                    <div style={{ borderTop: '1px solid var(--gray-100)', margin: '4px 0' }}></div>
+                    {isLimitReached ? (
+                      <button
+                        className="dropdown-item"
+                        style={{ color: '#2563eb', fontWeight: 700, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                        onClick={() => {
+                          setShowCompanySwitcher(false);
+                          if (maxComp >= 3 || userProfile?.package?.planId === 'pro') {
+                            setShowMaxUpgradeModal(true);
+                          } else {
+                            navigate('/billing');
+                          }
+                        }}
+                      >
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                          <Sparkles size={14} /> Limit Reached ({ownedCount}/{maxComp})
+                        </span>
+                        <span style={{ fontSize: 11, fontWeight: 800, textDecoration: 'underline' }}>Upgrade</span>
+                      </button>
+                    ) : (
+                      <button
+                        className="dropdown-item"
+                        style={{ color: 'var(--primary-600)', fontWeight: 500 }}
+                        onClick={() => {
+                          navigate('/setup');
+                          setShowCompanySwitcher(false);
+                        }}
+                      >
+                        <Plus size={14} /> Create New Company
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Center: Search (hidden on mobile, visible on desktop) */}
@@ -368,6 +429,11 @@ export default function Navbar({ onToggleSidebar, onToggleMobile }) {
           </button>
         </div>
       )}
+
+      <MaxPlanUpgradeModal
+        isOpen={showMaxUpgradeModal}
+        onClose={() => setShowMaxUpgradeModal(false)}
+      />
     </header>
   );
 }

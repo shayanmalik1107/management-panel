@@ -263,6 +263,59 @@ export default function AdminDashboard() {
   ];
 
   if (isSetupMode) {
+    const maxComp = userProfile?.maxCompanies || userProfile?.package?.maxCompanies || 1;
+    const ownedCount = stats.snapCount >= 0 ? stats.ownedCount : (companyId ? 1 : 0);
+    const isLimitReached = companyId && ownedCount >= maxComp;
+
+    if (isLimitReached) {
+      return (
+        <div style={{
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'var(--gray-50)',
+          padding: 'var(--space-4)',
+        }}>
+          <div style={{ width: '100%', maxWidth: 480, textAlign: 'center' }}>
+            <div style={{
+              background: 'white',
+              borderRadius: 'var(--radius-lg)',
+              border: 'var(--border)',
+              boxShadow: 'var(--shadow-md)',
+              padding: 'var(--space-8)',
+            }}>
+              <div className="auth-logo-icon" style={{ margin: '0 auto var(--space-4)', background: '#fee2e2', color: '#ef4444', display: 'inline-flex' }}>
+                <Plus size={24} />
+              </div>
+              <h2 style={{ fontSize: 'var(--font-size-2xl)', marginBottom: 'var(--space-2)', color: '#0f172a' }}>
+                Company Limit Reached
+              </h2>
+              <p style={{ color: 'var(--gray-500)', fontSize: 'var(--font-size-sm)', marginBottom: 'var(--space-6)', lineHeight: 1.5 }}>
+                Your current plan allows up to <strong>{maxComp} Company Workspace(s)</strong> ({ownedCount}/{maxComp} created). Upgrade to Pro Plan to add more companies!
+              </p>
+
+              <button
+                className="btn btn-primary btn-block btn-lg"
+                onClick={() => navigate('/select-package')}
+                style={{ background: '#2563eb' }}
+              >
+                Upgrade Plan to Add Companies
+              </button>
+
+              <button
+                className="btn btn-ghost btn-block"
+                style={{ marginTop: 'var(--space-3)' }}
+                onClick={() => navigate('/dashboard')}
+              >
+                Back to Dashboard
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div style={{
         minHeight: '100vh',

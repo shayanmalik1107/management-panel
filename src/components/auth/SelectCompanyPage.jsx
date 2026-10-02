@@ -7,6 +7,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { logout } from '../../services/authService';
 import { Building2, Plus, ArrowRight, CheckCircle2, Users, LogOut, ShieldCheck, Search, Briefcase, XCircle, Clock } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
+import MaxPlanUpgradeModal from '../common/MaxPlanUpgradeModal';
 
 export default function SelectCompanyPage() {
   const { userProfile, companyId, currentUser } = useAuth();
@@ -17,6 +18,7 @@ export default function SelectCompanyPage() {
   const [loading, setLoading] = useState(true);
   const [selectingId, setSelectingId] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showMaxUpgradeModal, setShowMaxUpgradeModal] = useState(false);
 
   useEffect(() => {
     if (!userProfile?.uid) return;
@@ -142,22 +144,25 @@ export default function SelectCompanyPage() {
 
       {/* Main Content Container */}
       <main style={{ maxWidth: 1040, margin: '0 auto', padding: '40px 20px' }}>
-        {/* Title Banner */}
+        {/* Title Banner & Package Info */}
         <div style={{ textAlign: 'center', marginBottom: 36 }}>
           <div style={{
             display: 'inline-flex',
             alignItems: 'center',
-            gap: 6,
-            padding: '6px 16px',
-            borderRadius: 20,
+            gap: 12,
+            padding: '8px 20px',
+            borderRadius: 24,
             background: '#eff6ff',
             border: '1px solid #bfdbfe',
             color: '#1d4ed8',
             fontSize: 13,
-            fontWeight: 600,
-            marginBottom: 14,
+            fontWeight: 700,
+            marginBottom: 16,
           }}>
-            <Briefcase size={14} /> Select Workspace
+            <Briefcase size={15} />
+            <span>Plan: <strong>{userProfile?.package?.name || (userProfile?.package?.planId === 'pro' ? 'Pro Multi-Company' : 'Basic Plan')}</strong></span>
+            <span style={{ color: '#93c5fd' }}>•</span>
+            <span>Companies: <strong>{companies.filter(c => c.isOwner).length} / {userProfile?.maxCompanies || userProfile?.package?.maxCompanies || 1}</strong></span>
           </div>
           <h1 style={{ fontSize: 30, fontWeight: 800, color: '#0f172a', margin: '0 0 10px 0' }}>
             Which company do you want to manage?
@@ -235,25 +240,7 @@ export default function SelectCompanyPage() {
               >
                 <div>
                   {/* Status / Active Badge */}
-                  {comp.status === 'pending' ? (
-                    <div style={{
-                      position: 'absolute',
-                      top: 18,
-                      right: 18,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 4,
-                      padding: '4px 10px',
-                      borderRadius: 20,
-                      background: '#fef3c7',
-                      border: '1px solid #fde68a',
-                      color: '#d97706',
-                      fontSize: 11,
-                      fontWeight: 700,
-                    }}>
-                      <Clock size={13} /> Pending Verification
-                    </div>
-                  ) : (comp.status === 'closed' || comp.status === 'disabled') ? (
+                  {(comp.status === 'closed' || comp.status === 'disabled') ? (
                     <div style={{
                       position: 'absolute',
                       top: 18,
@@ -347,26 +334,8 @@ export default function SelectCompanyPage() {
                   </div>
                 </div>
 
-                {/* Blue Button for Active Companies / Disabled or Pending Notice Box */}
-                {comp.status === 'pending' ? (
-                  <div style={{
-                    width: '100%',
-                    padding: '12px 18px',
-                    borderRadius: 10,
-                    background: '#fef3c7',
-                    border: '1px solid #fde68a',
-                    color: '#d97706',
-                    fontSize: 13,
-                    fontWeight: 700,
-                    textAlign: 'center',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 6,
-                  }}>
-                    <Clock size={16} /> Awaiting System Approval
-                  </div>
-                ) : (comp.status === 'closed' || comp.status === 'disabled') ? (
+                {/* Blue Button for Active Companies / Disabled Notice Box */}
+                {(comp.status === 'closed' || comp.status === 'disabled') ? (
                   <div style={{
                     width: '100%',
                     padding: '12px 18px',
@@ -433,55 +402,100 @@ export default function SelectCompanyPage() {
           })}
 
           {/* Add New Company Card */}
-          <div
-            onClick={() => navigate('/setup')}
-            style={{
-              background: '#ffffff',
-              border: '2px dashed #cbd5e1',
-              borderRadius: 16,
-              padding: 24,
-              cursor: 'pointer',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              textAlign: 'center',
-              minHeight: 220,
-              transition: 'all 0.2s ease-in-out',
-            }}
-            onMouseOver={(e) => {
-              e.currentTarget.style.borderColor = '#2563eb';
-              e.currentTarget.style.background = '#eff6ff';
-              e.currentTarget.style.transform = 'translateY(-2px)';
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.borderColor = '#cbd5e1';
-              e.currentTarget.style.background = '#ffffff';
-              e.currentTarget.style.transform = 'translateY(0)';
-            }}
-          >
-            <div style={{
-              width: 52,
-              height: 52,
-              borderRadius: '50%',
-              background: '#dbeafe',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#2563eb',
-              marginBottom: 14,
-            }}>
-              <Plus size={26} />
-            </div>
-            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', margin: '0 0 4px 0' }}>
-              Add New Company
-            </h3>
-            <p style={{ fontSize: 13, color: '#64748b', margin: 0 }}>
-              Create another workspace for a different shop or business branch
-            </p>
-          </div>
+          {(() => {
+            const ownedCount = companies.filter(c => c.isOwner).length;
+            const maxComp = userProfile?.maxCompanies || userProfile?.package?.maxCompanies || 1;
+            const isLimitReached = ownedCount >= maxComp;
+
+            return (
+              <div
+                onClick={() => {
+                  if (isLimitReached) {
+                    if (maxComp >= 3 || userProfile?.package?.planId === 'pro') {
+                      setShowMaxUpgradeModal(true);
+                    } else {
+                      navigate('/select-package');
+                    }
+                  } else {
+                    navigate('/setup');
+                  }
+                }}
+                style={{
+                  background: isLimitReached ? '#f8fafc' : '#ffffff',
+                  border: isLimitReached ? '2px dashed #93c5fd' : '2px dashed #cbd5e1',
+                  borderRadius: 16,
+                  padding: 24,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  textAlign: 'center',
+                  minHeight: 220,
+                  transition: 'all 0.2s ease-in-out',
+                  opacity: isLimitReached ? 0.8 : 1,
+                }}
+                onMouseOver={(e) => {
+                  if (!isLimitReached) {
+                    e.currentTarget.style.borderColor = '#2563eb';
+                    e.currentTarget.style.background = '#eff6ff';
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                  }
+                }}
+                onMouseOut={(e) => {
+                  if (!isLimitReached) {
+                    e.currentTarget.style.borderColor = '#cbd5e1';
+                    e.currentTarget.style.background = '#ffffff';
+                    e.currentTarget.style.transform = 'translateY(0)';
+                  }
+                }}
+              >
+                <div style={{
+                  width: 52,
+                  height: 52,
+                  borderRadius: '50%',
+                  background: isLimitReached ? '#fee2e2' : '#dbeafe',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: isLimitReached ? '#ef4444' : '#2563eb',
+                  marginBottom: 14,
+                }}>
+                  <Plus size={26} />
+                </div>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', margin: '0 0 4px 0' }}>
+                  {isLimitReached ? 'Company Limit Reached' : 'Add New Company'}
+                </h3>
+                <p style={{ fontSize: 13, color: '#64748b', margin: 0 }}>
+                  {isLimitReached
+                    ? `Your plan allows up to ${maxComp} company workspace(s) (${ownedCount}/${maxComp} created).`
+                    : 'Create another workspace for a different shop or business branch'
+                  }
+                </p>
+                {isLimitReached && (
+                  <span style={{
+                    marginTop: 12,
+                    fontSize: 12,
+                    fontWeight: 800,
+                    color: '#2563eb',
+                    background: '#eff6ff',
+                    padding: '4px 12px',
+                    borderRadius: 20,
+                    border: '1px solid #bfdbfe',
+                  }}>
+                    Click to Request Upgrade
+                  </span>
+                )}
+              </div>
+            );
+          })()}
         </div>
       </main>
+
+      <MaxPlanUpgradeModal
+        isOpen={showMaxUpgradeModal}
+        onClose={() => setShowMaxUpgradeModal(false)}
+      />
     </div>
   );
 }

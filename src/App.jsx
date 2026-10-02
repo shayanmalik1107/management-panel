@@ -10,6 +10,11 @@ import LoginPage from './components/auth/LoginPage';
 import RegisterPage from './components/auth/RegisterPage';
 import WelcomeScreen from './components/auth/WelcomeScreen';
 import SelectCompanyPage from './components/auth/SelectCompanyPage';
+import PackageSelectionPage from './components/auth/PackageSelectionPage';
+import PaymentPendingPage from './components/auth/PaymentPendingPage';
+import ControlPanelPage from './components/controlPanel/ControlPanelPage';
+import BillingPage from './components/billing/BillingPage';
+import UpgradeCelebrationModal from './components/common/UpgradeCelebrationModal';
 
 // Dashboards
 import AdminDashboard from './components/dashboard/AdminDashboard';
@@ -70,6 +75,7 @@ function DashboardRouter() {
 function App() {
   return (
     <AuthProvider>
+      <UpgradeCelebrationModal />
       <Router>
         <Routes>
           {/* Public / Auth Routes */}
@@ -85,6 +91,25 @@ function App() {
             <PublicRoute>
               <RegisterPage />
             </PublicRoute>
+          } />
+
+          {/* Package Selection Screen */}
+          <Route path="/select-package" element={
+            <ProtectedRoute>
+              <PackageSelectionPage />
+            </ProtectedRoute>
+          } />
+
+          {/* Payment Verification Pending Screen */}
+          <Route path="/payment-pending" element={
+            <ProtectedRoute>
+              <PaymentPendingPage />
+            </ProtectedRoute>
+          } />
+
+          {/* Super Admin Control Panel */}
+          <Route path="/control-panel" element={
+            <ControlPanelPage />
           } />
 
           {/* Standalone Company Selection Screen */}
@@ -148,6 +173,7 @@ function App() {
             <Route path="/reports" element={<AdminRoute><ReportsPage /></AdminRoute>} />
             <Route path="/employees" element={<AdminRoute><EmployeesList /></AdminRoute>} />
             <Route path="/employees/:id" element={<AdminRoute><EmployeeProfile /></AdminRoute>} />
+            <Route path="/billing" element={<AdminRoute><BillingPage /></AdminRoute>} />
             <Route path="/settings" element={<AdminRoute><SettingsPage /></AdminRoute>} />
           </Route>
 

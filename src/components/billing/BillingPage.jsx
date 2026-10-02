@@ -41,23 +41,23 @@ export default function BillingPage() {
   }, [isBasicActive, userProfile]);
 
   const sub = userProfile?.subscription || {};
-  const startDateStr = sub.startDate ? new Date(sub.startDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A';
-  const expiryDateStr = sub.expiryDate ? new Date(sub.expiryDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A';
-
-  const { currentDay, daysRemaining, isExpired } = useMemo(() => {
-    if (!sub.startDate && !sub.expiryDate) {
-      return { currentDay: 1, daysRemaining: 30, isExpired: false };
-    }
+  const { todayDateStr, startDateStr, expiryDateStr, daysRemaining, isExpired } = useMemo(() => {
     const now = Date.now();
-    const realElapsedDays = sub.startDate ? Math.max(0, Math.floor((now - sub.startDate) / (1000 * 60 * 60 * 24))) : 0;
-    const totalDaysPassed = realElapsedDays + (sub.extraDaysPassed || 0);
-    const currDay = Math.min(30, totalDaysPassed + 1);
-    const remDays = sub.expiryDate
-      ? Math.max(0, Math.ceil((sub.expiryDate - now) / (1000 * 60 * 60 * 24)) - (sub.extraDaysPassed || 0))
-      : Math.max(0, 30 - totalDaysPassed);
-    const expired = sub.status === 'expired' || remDays <= 0 || (sub.expiryDate && (now + ((sub.extraDaysPassed || 0) * 86400000)) >= sub.expiryDate);
-    return { currentDay: currDay, daysRemaining: remDays, isExpired: expired };
-  }, [sub]);
+    const oneDayMs = 24 * 60 * 60 * 1000;
+    const start = sub.startDate || userProfile?.approvedAt || userProfile?.createdAt || now;
+    const extra = sub.extraDaysPassed || 0;
+    const todayTime = now + (extra * oneDayMs);
+    const expTime = sub.expiryDate || (start + 30 * oneDayMs);
+
+    const startStr = new Date(start).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    const todayStr = new Date(todayTime).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    const expStr = new Date(expTime).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+
+    const remDays = Math.max(0, Math.ceil((expTime - todayTime) / oneDayMs));
+    const expired = sub.status === 'expired' || todayTime >= expTime || remDays <= 0;
+
+    return { todayDateStr: todayStr, startDateStr: startStr, expiryDateStr: expStr, daysRemaining: remDays, isExpired: expired };
+  }, [sub, userProfile]);
 
   const maxComp = userProfile?.maxCompanies || userProfile?.package?.maxCompanies || 1;
 
@@ -216,9 +216,9 @@ export default function BillingPage() {
             {daysRemaining} <span style={{ fontSize: 14, color: '#64748b', fontWeight: 600 }}>Days Left</span>
           </div>
           <div style={{ borderTop: '1px solid #f1f5f9', marginTop: 12, paddingTop: 12, fontSize: 12, color: '#475569', display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <div>Current Progress: <strong style={{ color: '#2563eb' }}>Day {currentDay} of 30</strong></div>
-            <div>Started: <strong>{startDateStr}</strong></div>
-            <div>Expires On: <strong style={{ color: '#0f172a' }}>{expiryDateStr}</strong></div>
+            <div>Starting Date: <strong>{startDateStr}</strong></div>
+            <div>Today's Date: <strong style={{ color: '#2563eb' }}>{todayDateStr}</strong></div>
+            <div>Expiry Date: <strong style={{ color: '#0f172a' }}>{expiryDateStr}</strong></div>
           </div>
         </div>
 

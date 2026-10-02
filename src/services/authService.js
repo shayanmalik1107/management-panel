@@ -198,9 +198,15 @@ export async function approveUserAccount(uid, maxCompaniesOverride = null, planI
   const finalLimit = Number(maxCompaniesOverride) > 0 ? Number(maxCompaniesOverride) : defaultLimit;
 
   const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+  const oneDayMs = 24 * 60 * 60 * 1000;
   const now = Date.now();
 
-  const baseExpiry = now + thirtyDaysMs;
+  const existingSub = userData.subscription || {};
+  const extraDays = existingSub.extraDaysPassed || 0;
+  
+  // Calculate today's date taking extraDaysPassed into account
+  const currentTodayTime = now + (extraDays * oneDayMs);
+  const newExpiry = currentTodayTime + thirtyDaysMs;
 
   const updates = {};
   updates[`users/${uid}/accountStatus`] = 'active';
@@ -214,14 +220,15 @@ export async function approveUserAccount(uid, maxCompaniesOverride = null, planI
   updates[`users/${uid}/package/maxCompanies`] = finalLimit;
   updates[`users/${uid}/upgradeRequest`] = null;
 
-  // Save subscription dates (starting from now, expires 30 days from now)
+  // Save subscription dates: starting from current Today's Date, expiring 30 days from Today's Date, preserving extraDaysPassed
   updates[`users/${uid}/subscription`] = {
-    startDate: now,
-    expiryDate: baseExpiry,
+    startDate: currentTodayTime,
+    expiryDate: newExpiry,
     planId: finalPlan,
     price: isBasic ? 5000 : 10000,
     status: 'active',
     lastApprovedAt: now,
+    extraDaysPassed: extraDays,
   };
 
   const dbRef = ref(database);
@@ -239,13 +246,17 @@ export async function addSubscriptionMonth(uid) {
   const userData = snap.val();
   const sub = userData.subscription || {};
   const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+  const oneDayMs = 24 * 60 * 60 * 1000;
   const now = Date.now();
 
-  const currentExpiry = (sub.expiryDate && sub.expiryDate > now) ? sub.expiryDate : now;
+  const extraDays = sub.extraDaysPassed || 0;
+  const currentTodayTime = now + (extraDays * oneDayMs);
+
+  const currentExpiry = (sub.expiryDate && sub.expiryDate > currentTodayTime) ? sub.expiryDate : currentTodayTime;
   const newExpiry = currentExpiry + thirtyDaysMs;
 
   const updates = {};
-  updates[`users/${uid}/subscription/startDate`] = sub.startDate || now;
+  updates[`users/${uid}/subscription/startDate`] = sub.startDate || currentTodayTime;
   updates[`users/${uid}/subscription/expiryDate`] = newExpiry;
   updates[`users/${uid}/subscription/status`] = 'active';
   updates[`users/${uid}/accountStatus`] = 'active';

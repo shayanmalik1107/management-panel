@@ -203,9 +203,14 @@ export async function approveUserAccount(uid, maxCompaniesOverride = null, planI
   const existingSub = userData.subscription || {};
   const extraDays = existingSub.extraDaysPassed || 0;
   
-  // Calculate today's date taking extraDaysPassed into account
+  // Calculate current Today's Date
   const currentTodayTime = now + (extraDays * oneDayMs);
-  const newExpiry = currentTodayTime + thirtyDaysMs;
+
+  // If renewing early before expiry, add 30 days to existing expiry date so unused days carry over!
+  const baseTime = (existingSub.expiryDate && existingSub.expiryDate > currentTodayTime)
+    ? existingSub.expiryDate
+    : currentTodayTime;
+  const newExpiry = baseTime + thirtyDaysMs;
 
   const updates = {};
   updates[`users/${uid}/accountStatus`] = 'active';
@@ -219,7 +224,7 @@ export async function approveUserAccount(uid, maxCompaniesOverride = null, planI
   updates[`users/${uid}/package/maxCompanies`] = finalLimit;
   updates[`users/${uid}/upgradeRequest`] = null;
 
-  // Save subscription dates: starting from current Today's Date, expiring 30 days from Today's Date, preserving extraDaysPassed
+  // Save subscription dates: starting from current Today's Date, expiry date carries over remaining days
   updates[`users/${uid}/subscription`] = {
     startDate: currentTodayTime,
     expiryDate: newExpiry,

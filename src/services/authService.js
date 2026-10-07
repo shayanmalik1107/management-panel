@@ -206,11 +206,8 @@ export async function approveUserAccount(uid, maxCompaniesOverride = null, planI
   // Calculate current Today's Date
   const currentTodayTime = now + (extraDays * oneDayMs);
 
-  // If renewing early before expiry, add 30 days to existing expiry date so unused days carry over!
-  const baseTime = (existingSub.expiryDate && existingSub.expiryDate > currentTodayTime)
-    ? existingSub.expiryDate
-    : currentTodayTime;
-  const newExpiry = baseTime + thirtyDaysMs;
+  // When upgrading or approving a plan, set subscription to exactly 30 days from today (prorated billing adjusts remaining days)
+  const newExpiry = currentTodayTime + thirtyDaysMs;
 
   const updates = {};
   updates[`users/${uid}/accountStatus`] = 'active';
@@ -224,7 +221,7 @@ export async function approveUserAccount(uid, maxCompaniesOverride = null, planI
   updates[`users/${uid}/package/maxCompanies`] = finalLimit;
   updates[`users/${uid}/upgradeRequest`] = null;
 
-  // Save subscription dates: starting from current Today's Date, expiry date carries over remaining days
+  // Save subscription dates: starting from current Today's Date, expiring 30 days from today
   updates[`users/${uid}/subscription`] = {
     startDate: currentTodayTime,
     expiryDate: newExpiry,

@@ -89,18 +89,21 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
     <>
       {mobileOpen && <div className="mobile-overlay" onClick={onMobileClose} />}
       <aside className={`sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
-        <div className="sidebar-header">
+        <div className="sidebar-header" style={{ padding: collapsed ? '14px 10px' : '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div 
-            className="sidebar-logo" 
+            className="sidebar-logo-wrap" 
             onClick={collapsed ? onToggle : undefined}
-            style={{ cursor: collapsed ? 'pointer' : 'default' }}
-            title={collapsed ? 'Expand sidebar' : ''}
+            style={{ cursor: collapsed ? 'pointer' : 'default', display: 'flex', alignItems: 'center' }}
+            title={collapsed ? 'Expand LAMBA sidebar' : 'LAMBA'}
           >
-            <Building2 size={20} />
-          </div>
-          <div className="sidebar-brand">
-            <span className="sidebar-brand-name">BizManager</span>
-            <span className="sidebar-brand-sub">Business Suite</span>
+            {collapsed ? (
+              <img src="/lambalogo.png" alt="LAMBA" style={{ height: '36px', maxWidth: '36px', objectFit: 'contain' }} />
+            ) : (
+              <>
+                <img src="/lamba.png" alt="LAMBA" className="lamba-logo-desktop" style={{ height: '38px', maxWidth: '160px', objectFit: 'contain' }} />
+                <img src="/lambalogo.png" alt="LAMBA" className="lamba-logo-mobile" style={{ height: '34px', maxWidth: '34px', objectFit: 'contain' }} />
+              </>
+            )}
           </div>
           <button
             className="btn btn-ghost btn-icon"

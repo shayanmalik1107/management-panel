@@ -117,14 +117,9 @@ export default function SelectCompanyPage() {
     }}>
       {/* Header Bar */}
       <header className="select-company-header">
-        <div className="select-company-brand">
-          <div className="select-company-logo">
-            <Building2 size={22} />
-          </div>
-          <div>
-            <div className="select-company-title">BizManager</div>
-            <div className="select-company-sub">Company Selector</div>
-          </div>
+        <div className="select-company-brand" style={{ display: 'flex', alignItems: 'center' }}>
+          <img src="/lamba.png" alt="LAMBA" className="lamba-logo-desktop" style={{ height: '36px', maxWidth: '160px', objectFit: 'contain' }} />
+          <img src="/lambalogo.png" alt="LAMBA" className="lamba-logo-mobile" style={{ height: '32px', maxWidth: '32px', objectFit: 'contain' }} />
         </div>
 
         <div className="select-company-user">

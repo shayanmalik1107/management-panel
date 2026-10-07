@@ -5,7 +5,7 @@ export default function MaxPlanUpgradeModal({ isOpen, onClose }) {
 
   const whatsappNumber = '923104824942';
   const whatsappMessage = encodeURIComponent(
-    'Hello BizManager Support Team! I have reached my company limit on the Pro Package and would like to inquire about further upgrades and custom company slot packages.'
+    'Hello LAMBA Support Team! I have reached my company limit on the Pro Package and would like to inquire about further upgrades and custom company slot packages.'
   );
   const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${whatsappMessage}`;
 

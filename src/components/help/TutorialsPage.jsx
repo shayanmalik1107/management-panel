@@ -6,7 +6,7 @@ export default function TutorialsPage() {
       <div className="page-header">
         <div className="page-header-left">
           <h1>Tutorials & Help</h1>
-          <p className="text-muted text-sm">Learn how to use BizManager effectively</p>
+          <p className="text-muted text-sm">Learn how to use LAMBA effectively</p>
         </div>
       </div>
 

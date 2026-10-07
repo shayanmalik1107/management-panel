@@ -86,12 +86,9 @@ export default function LoginPage() {
     <div className="auth-page">
       <div className="auth-container">
         <div className="auth-card">
-          <div className="auth-logo">
-            <div className="auth-logo-icon">
-              <Building2 size={24} />
-            </div>
-            <h1>BizManager</h1>
-            <p>Business Management System</p>
+          <div className="auth-logo" style={{ textAlign: 'center', marginBottom: 20 }}>
+            <img src="/lamba.png" alt="LAMBA" className="lamba-logo-desktop" style={{ maxHeight: '70px', margin: '0 auto', objectFit: 'contain' }} />
+            <img src="/lambalogo.png" alt="LAMBA" className="lamba-logo-mobile" style={{ maxHeight: '55px', margin: '0 auto', objectFit: 'contain' }} />
           </div>
 
           <h2 className="auth-title">Welcome back</h2>

@@ -94,14 +94,9 @@ export default function PackageSelectionPage() {
     }}>
       {/* Top Header */}
       <header className="select-company-header" style={{ borderBottom: '1px solid #e2e8f0', background: '#ffffff' }}>
-        <div className="select-company-brand">
-          <div className="select-company-logo" style={{ background: '#2563eb', color: '#fff' }}>
-            <Building2 size={22} />
-          </div>
-          <div>
-            <div className="select-company-title" style={{ fontSize: 18, fontWeight: 800, color: '#0f172a' }}>BizManager</div>
-            <div className="select-company-sub" style={{ fontSize: 12, color: '#64748b' }}>Account Subscription & Upgrades</div>
-          </div>
+        <div className="select-company-brand" style={{ display: 'flex', alignItems: 'center' }}>
+          <img src="/lamba.png" alt="LAMBA" className="lamba-logo-desktop" style={{ height: '36px', maxWidth: '160px', objectFit: 'contain' }} />
+          <img src="/lambalogo.png" alt="LAMBA" className="lamba-logo-mobile" style={{ height: '32px', maxWidth: '32px', objectFit: 'contain' }} />
         </div>
 
         <div className="select-company-user" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>

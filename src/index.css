@@ -3160,17 +3160,25 @@ h4 { font-size: var(--font-size-lg); }
   animation: spin 0.8s linear infinite;
 }
 
-.loading-spinner.lg {
-  width: 44px;
-  height: 44px;
-  border-width: 4px;
+/* ============================================================
+   RESPONSIVE LAMBA LOGO SYSTEM
+   ============================================================ */
+.lamba-logo-desktop {
+  display: block;
+}
+.lamba-logo-mobile {
+  display: none;
 }
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
+@media (max-width: 767px) {
+  .lamba-logo-desktop {
+    display: none !important;
+  }
+  .lamba-logo-mobile {
+    display: block !important;
   }
 }
+
 
 
 

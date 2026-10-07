@@ -53,7 +53,7 @@ export default function OnboardingChecklist() {
   return (
     <div className="onboarding-card">
       <div className="onboarding-header">
-        <h3>Welcome to {companyInfo?.name || 'BizManager'}! Let's set up your business.</h3>
+        <h3>Welcome to {companyInfo?.name || 'LAMBA'}! Let's set up your business.</h3>
         <button className="btn btn-ghost btn-sm" onClick={dismiss}>
           <X size={16} /> Hide
         </button>

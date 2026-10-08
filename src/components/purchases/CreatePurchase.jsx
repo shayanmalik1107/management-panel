@@ -110,11 +110,13 @@ export default function CreatePurchase() {
     if (item.unitType === 'box') {
       const boxQty = Number(item.boxQty) || 0;
       const pricePerBox = Number(item.pricePerBox) || 0;
-      const subBoxesPerBox = Number(item.subBoxesPerBox) || 0;
-      const pcsPerSubBox = Number(item.pcsPerSubBox) || 0;
+      const hasSubBoxes = item.hasSubBoxes !== false;
+      const subBoxesPerBox = hasSubBoxes ? (Number(item.subBoxesPerBox) || 0) : 1;
+      const pcsPerSubBox = hasSubBoxes ? (Number(item.pcsPerSubBox) || 0) : (Number(item.pcsPerBox) || 0);
+      const pcsPerBox = Number(item.pcsPerBox) || 0;
       const freePcsPerBox = Number(item.freePcsPerBox) || 0;
 
-      const paidPcsPerBox = subBoxesPerBox * pcsPerSubBox;
+      const paidPcsPerBox = hasSubBoxes ? (subBoxesPerBox * pcsPerSubBox) : pcsPerBox;
       const totalPcsPerBox = paidPcsPerBox + freePcsPerBox;
       const totalPieces = boxQty * totalPcsPerBox;
       const lineTotal = boxQty * pricePerBox;
@@ -125,7 +127,8 @@ export default function CreatePurchase() {
         lineTotal,
         effectiveCostPerPiece,
         paidPcsPerBox,
-        totalPcsPerBox
+        totalPcsPerBox,
+        hasSubBoxes
       };
     } else {
       const qty = Number(item.quantity) || 0;
@@ -135,7 +138,8 @@ export default function CreatePurchase() {
         lineTotal: qty * cost,
         effectiveCostPerPiece: cost,
         paidPcsPerBox: 0,
-        totalPcsPerBox: 0
+        totalPcsPerBox: 0,
+        hasSubBoxes: true
       };
     }
   };
@@ -158,6 +162,9 @@ export default function CreatePurchase() {
       const sale = Number(product.salePrice) || 0;
       const unitType = product.unitType || (product.unit === 'box' ? 'box' : 'pcs');
       const boxDetails = product.boxDetails || {};
+      const hasSubBoxes = boxDetails.hasSubBoxes !== undefined 
+        ? boxDetails.hasSubBoxes 
+        : Boolean(boxDetails.subBoxesPerBox && Number(boxDetails.subBoxesPerBox) > 1);
 
       setItems([
         ...items,
@@ -170,10 +177,12 @@ export default function CreatePurchase() {
           purchasePrice: cost,
           salePrice: sale,
           // Box fields
+          hasSubBoxes: hasSubBoxes,
           pricePerBox: boxDetails.pricePerBox || (cost > 0 ? cost : ''),
           boxQty: boxDetails.boxQty || 1,
           subBoxesPerBox: boxDetails.subBoxesPerBox || 12,
           pcsPerSubBox: boxDetails.pcsPerSubBox || 24,
+          pcsPerBox: boxDetails.pcsPerBox || (boxDetails.pcsPerSubBox && boxDetails.subBoxesPerBox ? (Number(boxDetails.pcsPerSubBox) * Number(boxDetails.subBoxesPerBox)) : boxDetails.pcsPerSubBox || 288),
           freePcsPerBox: boxDetails.freePcsPerBox !== undefined ? boxDetails.freePcsPerBox : 0,
           isNewDraft: Boolean(product.isNewDraft),
           draftDetails: product.draftDetails || null
@@ -189,6 +198,24 @@ export default function CreatePurchase() {
   const handleItemChange = (index, field, value) => {
     const updatedItems = [...items];
     updatedItems[index][field] = value;
+    setItems(updatedItems);
+  };
+
+  const handleRemoveSubBoxForItem = (idx) => {
+    const updatedItems = [...items];
+    const item = updatedItems[idx];
+    if (item.subBoxesPerBox && item.pcsPerSubBox && !item.pcsPerBox) {
+      item.pcsPerBox = String(Number(item.subBoxesPerBox) * Number(item.pcsPerSubBox));
+    } else if (!item.pcsPerBox && item.pcsPerSubBox) {
+      item.pcsPerBox = String(item.pcsPerSubBox);
+    }
+    item.hasSubBoxes = false;
+    setItems(updatedItems);
+  };
+
+  const handleAddSubBoxForItem = (idx) => {
+    const updatedItems = [...items];
+    updatedItems[idx].hasSubBoxes = true;
     setItems(updatedItems);
   };
 
@@ -363,8 +390,10 @@ export default function CreatePurchase() {
               boxDetails: item.unitType === 'box' ? {
                 pricePerBox: Number(item.pricePerBox) || 0,
                 boxQty: Number(item.boxQty) || 0,
-                subBoxesPerBox: Number(item.subBoxesPerBox) || 0,
-                pcsPerSubBox: Number(item.pcsPerSubBox) || 0,
+                hasSubBoxes: item.hasSubBoxes !== false,
+                subBoxesPerBox: item.hasSubBoxes !== false ? (Number(item.subBoxesPerBox) || 0) : 1,
+                pcsPerSubBox: item.hasSubBoxes !== false ? (Number(item.pcsPerSubBox) || 0) : (Number(item.pcsPerBox) || 0),
+                pcsPerBox: item.hasSubBoxes !== false ? ((Number(item.subBoxesPerBox) || 0) * (Number(item.pcsPerSubBox) || 0)) : (Number(item.pcsPerBox) || 0),
                 freePcsPerBox: Number(item.freePcsPerBox) || 0,
                 totalPieces: metrics.totalPieces,
                 totalBuyingCost: metrics.lineTotal,
@@ -390,8 +419,10 @@ export default function CreatePurchase() {
           boxDetails: item.unitType === 'box' ? {
             pricePerBox: Number(item.pricePerBox) || 0,
             boxQty: Number(item.boxQty) || 0,
-            subBoxesPerBox: Number(item.subBoxesPerBox) || 0,
-            pcsPerSubBox: Number(item.pcsPerSubBox) || 0,
+            hasSubBoxes: item.hasSubBoxes !== false,
+            subBoxesPerBox: item.hasSubBoxes !== false ? (Number(item.subBoxesPerBox) || 0) : 1,
+            pcsPerSubBox: item.hasSubBoxes !== false ? (Number(item.pcsPerSubBox) || 0) : (Number(item.pcsPerBox) || 0),
+            pcsPerBox: item.hasSubBoxes !== false ? ((Number(item.subBoxesPerBox) || 0) * (Number(item.pcsPerSubBox) || 0)) : (Number(item.pcsPerBox) || 0),
             freePcsPerBox: Number(item.freePcsPerBox) || 0,
             totalPieces: metrics.totalPieces,
             totalBuyingCost: metrics.lineTotal,
@@ -658,72 +689,154 @@ export default function CreatePurchase() {
                           {/* Item Inputs Responsive Grid */}
                           {isBox ? (
                             /* BOX MODE INPUTS */
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 'var(--space-3)' }}>
-                              <div>
-                                <label className="form-label text-xs">Price / Box ({currency}) *</label>
-                                <input
-                                  type="number"
-                                  className="form-input text-sm"
-                                  placeholder="e.g. 10000"
-                                  value={item.pricePerBox}
-                                  onChange={(e) => handleItemChange(idx, 'pricePerBox', e.target.value)}
-                                  min="0"
-                                />
-                              </div>
-                              <div>
-                                <label className="form-label text-xs">Box Quantity *</label>
-                                <input
-                                  type="number"
-                                  className="form-input text-sm"
-                                  placeholder="e.g. 2"
-                                  value={item.boxQty}
-                                  onChange={(e) => handleItemChange(idx, 'boxQty', e.target.value)}
-                                  min="1"
-                                />
-                              </div>
-                              <div>
-                                <label className="form-label text-xs">Sub-boxes / Box *</label>
-                                <input
-                                  type="number"
-                                  className="form-input text-sm"
-                                  placeholder="e.g. 12"
-                                  value={item.subBoxesPerBox}
-                                  onChange={(e) => handleItemChange(idx, 'subBoxesPerBox', e.target.value)}
-                                  min="1"
-                                />
-                              </div>
-                              <div>
-                                <label className="form-label text-xs">Pcs / Sub-box *</label>
-                                <input
-                                  type="number"
-                                  className="form-input text-sm"
-                                  placeholder="e.g. 24"
-                                  value={item.pcsPerSubBox}
-                                  onChange={(e) => handleItemChange(idx, 'pcsPerSubBox', e.target.value)}
-                                  min="1"
-                                />
-                              </div>
-                              <div>
-                                <label className="form-label text-xs">Free Pcs / Box</label>
-                                <input
-                                  type="number"
-                                  className="form-input text-sm"
-                                  placeholder="e.g. 25"
-                                  value={item.freePcsPerBox}
-                                  onChange={(e) => handleItemChange(idx, 'freePcsPerBox', e.target.value)}
-                                  min="0"
-                                />
-                              </div>
-                              <div>
-                                <label className="form-label text-xs">New Sale Price ({currency})</label>
-                                <input
-                                  type="number"
-                                  className="form-input text-sm"
-                                  placeholder="Sale price"
-                                  value={item.salePrice}
-                                  onChange={(e) => handleItemChange(idx, 'salePrice', e.target.value)}
-                                  min="0"
-                                />
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                              {item.hasSubBoxes === false && (
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--primary-50)', padding: '6px 10px', borderRadius: 'var(--radius-sm)', border: '1px dashed var(--primary-300)' }}>
+                                  <span className="text-xs text-primary-800" style={{ fontWeight: 600 }}>
+                                    📦 Simple Box Mode (Number of Boxes & Pieces per Box)
+                                  </span>
+                                  <button
+                                    type="button"
+                                    className="btn btn-primary btn-xs"
+                                    onClick={() => handleAddSubBoxForItem(idx)}
+                                    style={{ padding: '2px 8px', fontSize: '10px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
+                                  >
+                                    <Plus size={12} /> Add Sub-Box Level
+                                  </button>
+                                </div>
+                              )}
+
+                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 'var(--space-3)' }}>
+                                <div>
+                                  <label className="form-label text-xs">Price / Box ({currency}) *</label>
+                                  <input
+                                    type="number"
+                                    className="form-input text-sm"
+                                    placeholder="e.g. 10000"
+                                    value={item.pricePerBox}
+                                    onChange={(e) => handleItemChange(idx, 'pricePerBox', e.target.value)}
+                                    min="0"
+                                  />
+                                </div>
+
+                                {item.hasSubBoxes !== false ? (
+                                  <>
+                                    <div>
+                                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        <label className="form-label text-xs" style={{ margin: 0 }}>Box Quantity *</label>
+                                        <button
+                                          type="button"
+                                          className="btn btn-ghost btn-xs text-danger-600"
+                                          onClick={() => handleRemoveSubBoxForItem(idx)}
+                                          style={{ padding: '0 4px', fontSize: '10px', display: 'inline-flex', alignItems: 'center', gap: '1px' }}
+                                          title="Cross out sub-box level"
+                                        >
+                                          <X size={10} />
+                                        </button>
+                                      </div>
+                                      <input
+                                        type="number"
+                                        className="form-input text-sm"
+                                        placeholder="e.g. 2"
+                                        value={item.boxQty}
+                                        onChange={(e) => handleItemChange(idx, 'boxQty', e.target.value)}
+                                        min="1"
+                                      />
+                                    </div>
+                                    <div>
+                                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        <label className="form-label text-xs" style={{ margin: 0 }}>Sub-boxes / Box *</label>
+                                        <button
+                                          type="button"
+                                          className="btn btn-ghost btn-xs text-danger-600"
+                                          onClick={() => handleRemoveSubBoxForItem(idx)}
+                                          style={{ padding: '0 4px', fontSize: '10px', display: 'inline-flex', alignItems: 'center', gap: '1px' }}
+                                          title="Cross out sub-box level"
+                                        >
+                                          <X size={10} />
+                                        </button>
+                                      </div>
+                                      <input
+                                        type="number"
+                                        className="form-input text-sm"
+                                        placeholder="e.g. 12"
+                                        value={item.subBoxesPerBox}
+                                        onChange={(e) => handleItemChange(idx, 'subBoxesPerBox', e.target.value)}
+                                        min="1"
+                                      />
+                                    </div>
+                                    <div>
+                                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        <label className="form-label text-xs" style={{ margin: 0 }}>Pcs / Sub-box *</label>
+                                        <button
+                                          type="button"
+                                          className="btn btn-ghost btn-xs text-danger-600"
+                                          onClick={() => handleRemoveSubBoxForItem(idx)}
+                                          style={{ padding: '0 4px', fontSize: '10px', display: 'inline-flex', alignItems: 'center', gap: '1px' }}
+                                          title="Cross out sub-box level"
+                                        >
+                                          <X size={10} />
+                                        </button>
+                                      </div>
+                                      <input
+                                        type="number"
+                                        className="form-input text-sm"
+                                        placeholder="e.g. 24"
+                                        value={item.pcsPerSubBox}
+                                        onChange={(e) => handleItemChange(idx, 'pcsPerSubBox', e.target.value)}
+                                        min="1"
+                                      />
+                                    </div>
+                                  </>
+                                ) : (
+                                  <>
+                                    <div>
+                                      <label className="form-label text-xs">Box Quantity *</label>
+                                      <input
+                                        type="number"
+                                        className="form-input text-sm"
+                                        placeholder="e.g. 2"
+                                        value={item.boxQty}
+                                        onChange={(e) => handleItemChange(idx, 'boxQty', e.target.value)}
+                                        min="1"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="form-label text-xs">Pcs / Box *</label>
+                                      <input
+                                        type="number"
+                                        className="form-input text-sm"
+                                        placeholder="e.g. 288"
+                                        value={item.pcsPerBox}
+                                        onChange={(e) => handleItemChange(idx, 'pcsPerBox', e.target.value)}
+                                        min="1"
+                                      />
+                                    </div>
+                                  </>
+                                )}
+
+                                <div>
+                                  <label className="form-label text-xs">Free Pcs / Box</label>
+                                  <input
+                                    type="number"
+                                    className="form-input text-sm"
+                                    placeholder="e.g. 25"
+                                    value={item.freePcsPerBox}
+                                    onChange={(e) => handleItemChange(idx, 'freePcsPerBox', e.target.value)}
+                                    min="0"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="form-label text-xs">New Sale Price ({currency})</label>
+                                  <input
+                                    type="number"
+                                    className="form-input text-sm"
+                                    placeholder="Sale price"
+                                    value={item.salePrice}
+                                    onChange={(e) => handleItemChange(idx, 'salePrice', e.target.value)}
+                                    min="0"
+                                  />
+                                </div>
                               </div>
                             </div>
                           ) : (
@@ -767,7 +880,7 @@ export default function CreatePurchase() {
                             <div style={{ color: 'var(--gray-600)' }}>
                               {isBox ? (
                                 <span>
-                                  📦 <strong>{metrics.totalPieces} Pcs</strong> ({item.boxQty || 0} box × [{item.subBoxesPerBox || 0}×{item.pcsPerSubBox || 0} + {item.freePcsPerBox || 0} free]) | Calculated Cost: <strong>{formatCurrency(metrics.effectiveCostPerPiece, currency)} / piece</strong>
+                                  📦 <strong>{metrics.totalPieces} Pcs</strong> ({item.boxQty || 0} box × [{item.hasSubBoxes !== false ? `${item.subBoxesPerBox || 0}×${item.pcsPerSubBox || 0}` : `${item.pcsPerBox || 0} pcs/box`} + {item.freePcsPerBox || 0} free]) | Calculated Cost: <strong>{formatCurrency(metrics.effectiveCostPerPiece, currency)} / piece</strong>
                                 </span>
                               ) : (
                                 <span>

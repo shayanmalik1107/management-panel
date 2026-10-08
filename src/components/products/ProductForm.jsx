@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Save, Warehouse, Plus, ShoppingBag } from 'lucide-react';
+import { ArrowLeft, Save, Warehouse, Plus, ShoppingBag, X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { createProduct, getProduct, updateProduct } from '../../services/productService';
@@ -25,6 +25,7 @@ export default function ProductForm() {
   const [showQuickWarehouse, setShowQuickWarehouse] = useState(false);
   const [newWhName, setNewWhName] = useState('');
   const [creatingWh, setCreatingWh] = useState(false);
+  const [hasSubBoxes, setHasSubBoxes] = useState(true);
   
   const [form, setForm] = useState({
     name: '',
@@ -41,6 +42,7 @@ export default function ProductForm() {
     boxQty: '',
     subBoxesPerBox: '',
     pcsPerSubBox: '',
+    pcsPerBox: '',
     freePcsPerBox: '',
     warehouseId: '',
     warehouseName: '',
@@ -84,6 +86,13 @@ export default function ProductForm() {
             whName = whList[0].name;
           }
 
+          const boxDetails = loadedProduct.boxDetails || {};
+          const loadedHasSubBoxes = boxDetails.hasSubBoxes !== undefined 
+            ? boxDetails.hasSubBoxes 
+            : Boolean(boxDetails.subBoxesPerBox && Number(boxDetails.subBoxesPerBox) > 1);
+
+          setHasSubBoxes(loadedHasSubBoxes);
+
           setForm({
             name: loadedProduct.name || '',
             sku: loadedProduct.sku || '',
@@ -95,11 +104,12 @@ export default function ProductForm() {
             minimumStock: loadedProduct.minimumStock || 0,
             unit: loadedProduct.unit || 'pcs',
             unitType: loadedProduct.unitType || 'pcs',
-            pricePerBox: loadedProduct.boxDetails?.pricePerBox || '',
-            boxQty: loadedProduct.boxDetails?.boxQty || '',
-            subBoxesPerBox: loadedProduct.boxDetails?.subBoxesPerBox || '',
-            pcsPerSubBox: loadedProduct.boxDetails?.pcsPerSubBox || '',
-            freePcsPerBox: loadedProduct.boxDetails?.freePcsPerBox || '',
+            pricePerBox: boxDetails.pricePerBox || '',
+            boxQty: boxDetails.boxQty || '',
+            subBoxesPerBox: boxDetails.subBoxesPerBox || '',
+            pcsPerSubBox: boxDetails.pcsPerSubBox || '',
+            pcsPerBox: boxDetails.pcsPerBox || (boxDetails.pcsPerSubBox && boxDetails.subBoxesPerBox ? (Number(boxDetails.pcsPerSubBox) * Number(boxDetails.subBoxesPerBox)) : boxDetails.pcsPerSubBox || ''),
+            freePcsPerBox: boxDetails.freePcsPerBox || '',
             warehouseId: whId,
             warehouseName: whName,
             purchaseDate: new Date().toISOString().split('T')[0],
@@ -184,11 +194,12 @@ export default function ProductForm() {
 
   const boxQty = Number(form.boxQty) || 0;
   const pricePerBox = Number(form.pricePerBox) || 0;
-  const subBoxesPerBox = Number(form.subBoxesPerBox) || 0;
-  const pcsPerSubBox = Number(form.pcsPerSubBox) || 0;
+  const subBoxesPerBox = hasSubBoxes ? (Number(form.subBoxesPerBox) || 0) : 1;
+  const pcsPerSubBox = hasSubBoxes ? (Number(form.pcsPerSubBox) || 0) : (Number(form.pcsPerBox) || 0);
+  const pcsPerBox = Number(form.pcsPerBox) || 0;
   const freePcsPerBox = Number(form.freePcsPerBox) || 0;
 
-  const paidPcsPerBox = subBoxesPerBox * pcsPerSubBox;
+  const paidPcsPerBox = hasSubBoxes ? (subBoxesPerBox * pcsPerSubBox) : pcsPerBox;
   const totalPcsPerBox = paidPcsPerBox + freePcsPerBox;
   const calculatedTotalPieces = isBoxUnit ? (boxQty * totalPcsPerBox) : (Number(form.currentStock) || 0);
   const calculatedTotalBuyingCost = isBoxUnit ? (boxQty * pricePerBox) : ((Number(form.currentStock) || 0) * (Number(form.purchasePrice) || 0));
@@ -218,13 +229,20 @@ export default function ProductForm() {
         toast.error('Box quantity is required and must be greater than 0');
         return;
       }
-      if (subBoxesPerBox <= 0) {
-        toast.error('Sub-box quantity per box is required and must be greater than 0');
-        return;
-      }
-      if (pcsPerSubBox <= 0) {
-        toast.error('Pieces per sub-box is required and must be greater than 0');
-        return;
+      if (hasSubBoxes) {
+        if (subBoxesPerBox <= 0) {
+          toast.error('Sub-box quantity per box is required and must be greater than 0');
+          return;
+        }
+        if (pcsPerSubBox <= 0) {
+          toast.error('Pieces per sub-box is required and must be greater than 0');
+          return;
+        }
+      } else {
+        if (pcsPerBox <= 0) {
+          toast.error('Pieces per box is required and must be greater than 0');
+          return;
+        }
       }
     } else {
       if (form.purchasePrice <= 0) {
@@ -274,8 +292,10 @@ export default function ProductForm() {
         boxDetails: isBoxUnit ? {
           pricePerBox,
           boxQty,
-          subBoxesPerBox,
-          pcsPerSubBox,
+          hasSubBoxes,
+          subBoxesPerBox: hasSubBoxes ? subBoxesPerBox : 1,
+          pcsPerSubBox: hasSubBoxes ? pcsPerSubBox : pcsPerBox,
+          pcsPerBox: hasSubBoxes ? (subBoxesPerBox * pcsPerSubBox) : pcsPerBox,
           freePcsPerBox,
           totalPieces: calculatedTotalPieces,
           totalBuyingCost: calculatedTotalBuyingCost,
@@ -569,6 +589,23 @@ export default function ProductForm() {
           {/* BOX PACKAGING MODE FIELDS */}
           {form.unitType === 'box' ? (
             <>
+              {!hasSubBoxes && (
+                <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--primary-50)', padding: '10px 14px', borderRadius: 'var(--radius-md)', border: '1px dashed var(--primary-300)', marginBottom: 'var(--space-2)' }}>
+                  <div>
+                    <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--primary-900)' }}>📦 Simple Box Structure (2 Fields Mode)</span>
+                    <span className="text-xs text-muted" style={{ display: 'block' }}>Currently using Number of Boxes and Pieces per Box</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-xs"
+                    onClick={() => setHasSubBoxes(true)}
+                    style={{ padding: '5px 12px', fontSize: '11px', display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}
+                  >
+                    <Plus size={13} /> Add Sub-Box Level
+                  </button>
+                </div>
+              )}
+
               {/* Price per Box */}
               <div className="form-group">
                 <label className="form-label">Price per Box ({currency}) *</label>
@@ -582,49 +619,136 @@ export default function ProductForm() {
                 />
               </div>
 
-              {/* Box Quantity (Units in Boxes) */}
-              <div className="form-group">
-                <label className="form-label">Units in Boxes (Box Quantity) *</label>
-                <input 
-                  type="number" 
-                  className="form-input" 
-                  placeholder="e.g. 2"
-                  value={form.boxQty}
-                  onChange={e => setForm({...form, boxQty: e.target.value})}
-                  disabled={isEditing}
-                  min="1"
-                />
-              </div>
+              {hasSubBoxes ? (
+                <>
+                  {/* Box Quantity (Units in Boxes) */}
+                  <div className="form-group">
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                      <label className="form-label" style={{ margin: 0 }}>Units in Boxes (Box Quantity) *</label>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-xs text-danger-600"
+                        onClick={() => {
+                          if (form.subBoxesPerBox && form.pcsPerSubBox && !form.pcsPerBox) {
+                            setForm(prev => ({ ...prev, pcsPerBox: String(Number(form.subBoxesPerBox) * Number(form.pcsPerSubBox)) }));
+                          } else if (!form.pcsPerBox && form.pcsPerSubBox) {
+                            setForm(prev => ({ ...prev, pcsPerBox: String(form.pcsPerSubBox) }));
+                          }
+                          setHasSubBoxes(false);
+                        }}
+                        style={{ padding: '1px 6px', fontSize: '11px', color: 'var(--danger-600)', background: 'var(--danger-50)', border: '1px solid var(--danger-200)', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
+                        title="Cross out sub-box level (Switch to Number of Boxes & Pieces per Box)"
+                      >
+                        <X size={12} /> Remove Sub-box
+                      </button>
+                    </div>
+                    <input 
+                      type="number" 
+                      className="form-input" 
+                      placeholder="e.g. 2"
+                      value={form.boxQty}
+                      onChange={e => setForm({...form, boxQty: e.target.value})}
+                      disabled={isEditing}
+                      min="1"
+                    />
+                  </div>
 
-              {/* Sub-box Quantity */}
-              <div className="form-group">
-                <label className="form-label">Sub-box Quantity per Box *</label>
-                <input 
-                  type="number" 
-                  className="form-input" 
-                  placeholder="e.g. 12"
-                  value={form.subBoxesPerBox}
-                  onChange={e => setForm({...form, subBoxesPerBox: e.target.value})}
-                  min="1"
-                />
-              </div>
+                  {/* Sub-box Quantity */}
+                  <div className="form-group">
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                      <label className="form-label" style={{ margin: 0 }}>Sub-box Quantity per Box *</label>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-xs text-danger-600"
+                        onClick={() => {
+                          if (form.subBoxesPerBox && form.pcsPerSubBox && !form.pcsPerBox) {
+                            setForm(prev => ({ ...prev, pcsPerBox: String(Number(form.subBoxesPerBox) * Number(form.pcsPerSubBox)) }));
+                          } else if (!form.pcsPerBox && form.pcsPerSubBox) {
+                            setForm(prev => ({ ...prev, pcsPerBox: String(form.pcsPerSubBox) }));
+                          }
+                          setHasSubBoxes(false);
+                        }}
+                        style={{ padding: '1px 6px', fontSize: '11px', color: 'var(--danger-600)', background: 'var(--danger-50)', border: '1px solid var(--danger-200)', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
+                        title="Cross out sub-box level (Switch to Number of Boxes & Pieces per Box)"
+                      >
+                        <X size={12} /> Remove Sub-box
+                      </button>
+                    </div>
+                    <input 
+                      type="number" 
+                      className="form-input" 
+                      placeholder="e.g. 12"
+                      value={form.subBoxesPerBox}
+                      onChange={e => setForm({...form, subBoxesPerBox: e.target.value})}
+                      min="1"
+                    />
+                  </div>
 
-              {/* Pcs in Per Sub-box */}
-              <div className="form-group">
-                <label className="form-label">Pcs per Sub-box *</label>
-                <input 
-                  type="number" 
-                  className="form-input" 
-                  placeholder="e.g. 24"
-                  value={form.pcsPerSubBox}
-                  onChange={e => setForm({...form, pcsPerSubBox: e.target.value})}
-                  min="1"
-                />
-              </div>
+                  {/* Pcs per Sub-box */}
+                  <div className="form-group">
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                      <label className="form-label" style={{ margin: 0 }}>Pcs per Sub-box *</label>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-xs text-danger-600"
+                        onClick={() => {
+                          if (form.subBoxesPerBox && form.pcsPerSubBox && !form.pcsPerBox) {
+                            setForm(prev => ({ ...prev, pcsPerBox: String(Number(form.subBoxesPerBox) * Number(form.pcsPerSubBox)) }));
+                          } else if (!form.pcsPerBox && form.pcsPerSubBox) {
+                            setForm(prev => ({ ...prev, pcsPerBox: String(form.pcsPerSubBox) }));
+                          }
+                          setHasSubBoxes(false);
+                        }}
+                        style={{ padding: '1px 6px', fontSize: '11px', color: 'var(--danger-600)', background: 'var(--danger-50)', border: '1px solid var(--danger-200)', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
+                        title="Cross out sub-box level (Switch to Number of Boxes & Pieces per Box)"
+                      >
+                        <X size={12} /> Remove Sub-box
+                      </button>
+                    </div>
+                    <input 
+                      type="number" 
+                      className="form-input" 
+                      placeholder="e.g. 24"
+                      value={form.pcsPerSubBox}
+                      onChange={e => setForm({...form, pcsPerSubBox: e.target.value})}
+                      min="1"
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Number of Boxes */}
+                  <div className="form-group">
+                    <label className="form-label">Number of Boxes (Box Quantity) *</label>
+                    <input 
+                      type="number" 
+                      className="form-input" 
+                      placeholder="e.g. 2"
+                      value={form.boxQty}
+                      onChange={e => setForm({...form, boxQty: e.target.value})}
+                      disabled={isEditing}
+                      min="1"
+                    />
+                  </div>
+
+                  {/* Pieces per Box */}
+                  <div className="form-group">
+                    <label className="form-label">Pieces per Box *</label>
+                    <input 
+                      type="number" 
+                      className="form-input" 
+                      placeholder="e.g. 288"
+                      value={form.pcsPerBox}
+                      onChange={e => setForm({...form, pcsPerBox: e.target.value})}
+                      min="1"
+                    />
+                  </div>
+                </>
+              )}
 
               {/* Free Unit / Pieces per Box */}
               <div className="form-group">
-                <label className="form-label">Free Pieces per Big Box</label>
+                <label className="form-label">Free Pieces per Box</label>
                 <input 
                   type="number" 
                   className="form-input" 
@@ -728,7 +852,7 @@ export default function ProductForm() {
             </div>
             {isBoxUnit && (
               <div style={{ fontSize: '12px', color: 'var(--gray-600)', marginTop: '10px', borderTop: '1px dashed var(--primary-200)', paddingTop: '8px', lineHeight: 1.5 }}>
-                • Paid pcs per box: <strong>{paidPcsPerBox}</strong> ({subBoxesPerBox} sub-boxes × {pcsPerSubBox} pcs)<br/>
+                • Paid pcs per box: <strong>{paidPcsPerBox}</strong> {hasSubBoxes ? `(${subBoxesPerBox} sub-boxes × ${pcsPerSubBox} pcs)` : `(${pcsPerBox} pcs per box)`}<br/>
                 • Free pcs per box: <strong>{freePcsPerBox}</strong> | Total per box: <strong>{totalPcsPerBox} pcs</strong><br/>
                 • Total for {boxQty} box(es): <strong>{calculatedTotalPieces} total pieces</strong> | Total Cost: <strong>{formatCurrency(calculatedTotalBuyingCost, currency)}</strong>
               </div>

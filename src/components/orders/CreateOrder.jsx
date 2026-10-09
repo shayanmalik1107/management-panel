@@ -333,10 +333,10 @@ export default function CreateOrder() {
       </div>
 
       <div className="grid-2col-responsive">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', minWidth: 0, width: '100%' }}>
           
           {/* Customer Selection */}
-          <div className="card">
+          <div className="card" style={{ minWidth: 0, width: '100%' }}>
             <div className="card-header">
               <span className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Store size={18} className="text-muted" /> Customer / Shop
@@ -351,7 +351,7 @@ export default function CreateOrder() {
                 </button>
               )}
             </div>
-            <div className="card-body">
+            <div className="card-body" style={{ minWidth: 0, width: '100%' }}>
               <div className="form-group mb-4">
                 <label className="form-label">Order Date *</label>
                 <input 
@@ -404,13 +404,13 @@ export default function CreateOrder() {
           </div>
 
           {/* Product Selection */}
-          <div className="card">
+          <div className="card" style={{ minWidth: 0, width: '100%' }}>
             <div className="card-header">
               <span className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Package size={18} className="text-muted" /> Products
               </span>
             </div>
-            <div className="card-body">
+            <div className="card-body" style={{ minWidth: 0, width: '100%' }}>
               <div ref={searchRef} style={{ position: 'relative', marginBottom: 'var(--space-4)' }}>
                 <Search size={16} style={{ position: 'absolute', left: 12, top: 10, color: 'var(--gray-400)' }} />
                 <input 
@@ -454,63 +454,128 @@ export default function CreateOrder() {
                 )}
               </div>
 
-              {/* Selected Items Table */}
+              {/* Selected Items */}
               {orderItems.length > 0 ? (
-                <div className="table-container" style={{ border: 'var(--border)', borderRadius: 'var(--radius-sm)' }}>
-                  <table className="data-table">
-                    <thead style={{ background: 'var(--gray-25)' }}>
-                      <tr>
-                        <th>Product</th>
-                        <th style={{ width: 100 }}>Price</th>
-                        <th style={{ width: 100 }}>Qty</th>
-                        <th style={{ width: 100 }}>Total</th>
-                        <th style={{ width: 40 }}></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {orderItems.map((item, idx) => (
-                        <tr key={idx}>
-                          <td>
-                            <div className="font-medium">{item.productName}</div>
-                            <div className="text-xs text-muted">Stock: {item.currentStock}</div>
+                <div style={{ minWidth: 0, width: '100%' }}>
+                  {/* Desktop Table View */}
+                  <div className="table-container order-items-desktop" style={{ border: 'var(--border)', borderRadius: 'var(--radius-sm)', minWidth: 0, width: '100%', maxWidth: '100%', overflowX: 'auto' }}>
+                    <table className="data-table" style={{ width: '100%', minWidth: '460px' }}>
+                      <thead style={{ background: 'var(--gray-25)' }}>
+                        <tr>
+                          <th>Product</th>
+                          <th style={{ width: 100 }}>Price</th>
+                          <th style={{ width: 100 }}>Qty</th>
+                          <th style={{ width: 100 }}>Total</th>
+                          <th style={{ width: 40 }}></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {orderItems.map((item, idx) => (
+                          <tr key={idx}>
+                            <td>
+                              <div className="font-medium">{item.productName}</div>
+                              <div className="text-xs text-muted">Stock: {item.currentStock}</div>
+                              {item.returnedQty > 0 && (
+                                <div style={{ fontSize: '11px', color: 'var(--danger-600)', fontWeight: 600, marginTop: 2 }}>
+                                  ({item.returnedQty} returned)
+                                </div>
+                              )}
+                            </td>
+                            <td>
+                              <div className="font-medium" style={{ padding: '6px 0' }}>
+                                {formatCurrency(item.salePrice, currency)}
+                              </div>
+                            </td>
+                            <td>
+                              <input 
+                                type="number" 
+                                className="form-input" 
+                                style={{ padding: '6px', fontSize: 'var(--font-size-sm)', width: '70px' }}
+                                value={item.quantity}
+                                onChange={(e) => updateItem(idx, 'quantity', e.target.value)}
+                                min="0"
+                              />
+                              {item.returnedQty > 0 && (
+                                <div className="text-xs text-muted" style={{ fontSize: '10px', marginTop: 2 }}>
+                                  Min: {item.returnedQty}
+                                </div>
+                              )}
+                            </td>
+                            <td className="font-medium">
+                              {formatCurrency(item.salePrice * item.quantity, currency)}
+                            </td>
+                            <td>
+                              <button className="table-action-btn" style={{ color: 'var(--danger-500)' }} onClick={() => removeItem(idx)}>
+                                <Trash2 size={16} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Mobile Cards View */}
+                  <div className="order-items-mobile" style={{ flexDirection: 'column', gap: 'var(--space-3)' }}>
+                    {orderItems.map((item, idx) => (
+                      <div 
+                        key={idx} 
+                        style={{ 
+                          padding: 'var(--space-3)', 
+                          border: 'var(--border)', 
+                          borderRadius: 'var(--radius-md)', 
+                          background: 'white',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 'var(--space-2)'
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                          <div style={{ flex: 1, minWidth: 0, paddingRight: '8px' }}>
+                            <div className="font-medium" style={{ fontSize: 'var(--font-size-base)', wordBreak: 'break-word' }}>{item.productName}</div>
+                            <div className="text-xs text-muted" style={{ display: 'flex', gap: '8px', marginTop: '2px', flexWrap: 'wrap' }}>
+                              <span>Stock: {item.currentStock}</span>
+                              <span>•</span>
+                              <span>Price: {formatCurrency(item.salePrice, currency)}</span>
+                            </div>
                             {item.returnedQty > 0 && (
                               <div style={{ fontSize: '11px', color: 'var(--danger-600)', fontWeight: 600, marginTop: 2 }}>
                                 ({item.returnedQty} returned)
                               </div>
                             )}
-                          </td>
-                          <td>
-                            <div className="font-medium" style={{ padding: '6px 0' }}>
-                              {formatCurrency(item.salePrice, currency)}
-                            </div>
-                          </td>
-                          <td>
+                          </div>
+                          <button className="table-action-btn" style={{ color: 'var(--danger-500)', padding: '4px' }} onClick={() => removeItem(idx)}>
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 'var(--space-2)', borderTop: '1px solid var(--gray-100)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span className="text-xs text-muted font-medium">Qty:</span>
                             <input 
                               type="number" 
                               className="form-input" 
-                              style={{ padding: '6px', fontSize: 'var(--font-size-sm)' }}
+                              style={{ padding: '6px 8px', fontSize: 'var(--font-size-sm)', width: '80px' }}
                               value={item.quantity}
                               onChange={(e) => updateItem(idx, 'quantity', e.target.value)}
                               min="0"
                             />
                             {item.returnedQty > 0 && (
-                              <div className="text-xs text-muted" style={{ fontSize: '10px', marginTop: 2 }}>
-                                Min: {item.returnedQty}
-                              </div>
+                              <span className="text-xs text-muted" style={{ fontSize: '10px' }}>
+                                (Min: {item.returnedQty})
+                              </span>
                             )}
-                          </td>
-                          <td className="font-medium">
-                            {formatCurrency(item.salePrice * item.quantity, currency)}
-                          </td>
-                          <td>
-                            <button className="table-action-btn" style={{ color: 'var(--danger-500)' }} onClick={() => removeItem(idx)}>
-                              <Trash2 size={16} />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <span className="text-xs text-muted" style={{ display: 'block' }}>Total</span>
+                            <span className="font-bold text-primary-600" style={{ fontSize: 'var(--font-size-base)' }}>
+                              {formatCurrency(item.salePrice * item.quantity, currency)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ) : (
                 <div className="empty-state" style={{ padding: 'var(--space-6)', border: '1px dashed var(--gray-300)', borderRadius: 'var(--radius-md)' }}>

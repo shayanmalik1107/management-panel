@@ -4,6 +4,7 @@ import { ArrowLeft, Save } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { EXPENSE_CATEGORIES } from '../../utils/constants';
+import { getLocalDateString } from '../../utils/formatters';
 import { createExpense } from '../../services/expenseService';
 
 export default function ExpenseForm() {
@@ -18,7 +19,7 @@ export default function ExpenseForm() {
     amount: 0,
     reference: '',
     notes: '',
-    date: new Date().toISOString().split('T')[0]
+    date: getLocalDateString()
   });
 
   const handleSubmit = async (e) => {
@@ -90,7 +91,7 @@ export default function ExpenseForm() {
               className="form-input" 
               value={form.date}
               onChange={e => setForm({...form, date: e.target.value})}
-              max={new Date().toISOString().split('T')[0]}
+              max={getLocalDateString()}
             />
           </div>
 

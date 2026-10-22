@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { getCustomers } from '../../services/customerService';
 import { createCustomerPaymentReceived } from '../../services/paymentService';
-import { formatCurrency } from '../../utils/formatters';
+import { formatCurrency, getLocalDateString } from '../../utils/formatters';
 import ShopSelectDropdown from '../common/ShopSelectDropdown';
 
 export default function CreateCustomerPayment() {
@@ -24,7 +24,7 @@ export default function CreateCustomerPayment() {
     paymentMethod: 'Cash',
     reference: '',
     notes: '',
-    date: new Date().toISOString().split('T')[0]
+    date: getLocalDateString()
   });
 
   useEffect(() => {
@@ -155,7 +155,7 @@ export default function CreateCustomerPayment() {
                 className="form-input"
                 value={form.date}
                 onChange={e => setForm({ ...form, date: e.target.value })}
-                max={new Date().toISOString().split('T')[0]}
+                max={getLocalDateString()}
               />
             </div>
 

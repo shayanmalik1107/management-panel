@@ -4,7 +4,7 @@ import { ArrowLeft, Save } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { createSupplierPayment, getSupplierBalances } from '../../services/paymentService';
-import { formatCurrency } from '../../utils/formatters';
+import { formatCurrency, getLocalDateString } from '../../utils/formatters';
 
 export default function CreatePayment() {
   const { companyId, currentUser, userProfile, companyInfo, isAdmin } = useAuth();
@@ -22,7 +22,7 @@ export default function CreatePayment() {
     paymentMethod: 'Cash',
     reference: '',
     notes: '',
-    date: new Date().toISOString().split('T')[0]
+    date: getLocalDateString()
   });
 
   useEffect(() => {
@@ -116,7 +116,7 @@ export default function CreatePayment() {
               className="form-input" 
               value={form.date}
               onChange={e => setForm({...form, date: e.target.value})}
-              max={new Date().toISOString().split('T')[0]}
+              max={getLocalDateString()}
             />
           </div>
 

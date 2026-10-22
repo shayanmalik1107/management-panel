@@ -7,7 +7,7 @@ import { createProduct, getProduct, updateProduct } from '../../services/product
 import { getWarehouses, createWarehouse } from '../../services/warehouseService';
 import { fetchAllCompanySuppliers } from '../../services/supplierService';
 import SupplierSelectDropdown from '../common/SupplierSelectDropdown';
-import { formatCurrency } from '../../utils/formatters';
+import { formatCurrency, getLocalDateString } from '../../utils/formatters';
 
 export default function ProductForm() {
   const { id } = useParams();
@@ -46,7 +46,7 @@ export default function ProductForm() {
     freePcsPerBox: '',
     warehouseId: '',
     warehouseName: '',
-    purchaseDate: new Date().toISOString().split('T')[0],
+    purchaseDate: getLocalDateString(),
     supplierName: '',
     reference: '',
     notes: ''
@@ -112,7 +112,7 @@ export default function ProductForm() {
             freePcsPerBox: boxDetails.freePcsPerBox || '',
             warehouseId: whId,
             warehouseName: whName,
-            purchaseDate: new Date().toISOString().split('T')[0],
+            purchaseDate: getLocalDateString(),
             supplierName: '',
             reference: '',
             notes: ''
@@ -367,7 +367,7 @@ export default function ProductForm() {
                   className="form-input" 
                   value={form.purchaseDate}
                   onChange={e => setForm({...form, purchaseDate: e.target.value})}
-                  max={new Date().toISOString().split('T')[0]}
+                  max={getLocalDateString()}
                 />
               </div>
 

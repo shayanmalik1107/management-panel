@@ -6,7 +6,7 @@ import { useToast } from '../../contexts/ToastContext';
 import { getProducts } from '../../services/productService';
 import { getCustomers, createCustomer } from '../../services/customerService';
 import { createOrder, getOrder, updateOrder } from '../../services/orderService';
-import { formatCurrency } from '../../utils/formatters';
+import { formatCurrency, getLocalDateString } from '../../utils/formatters';
 
 export default function CreateOrder() {
   const { id } = useParams();
@@ -32,7 +32,7 @@ export default function CreateOrder() {
   const [paymentType, setPaymentType] = useState('credit');
   const [discount, setDiscount] = useState(0); // This is now a percentage %
   const [notes, setNotes] = useState('');
-  const [orderDate, setOrderDate] = useState(new Date().toISOString().split('T')[0]);
+  const [orderDate, setOrderDate] = useState(getLocalDateString());
 
   // Quick Customer Creation Modal
   const [showNewCustomerModal, setShowNewCustomerModal] = useState(false);
@@ -85,8 +85,8 @@ export default function CreateOrder() {
           setSelectedCustomer(existingOrder.customerId || '');
           setOrderDate(
             existingOrder.createdAt
-              ? new Date(existingOrder.createdAt).toISOString().split('T')[0]
-              : new Date().toISOString().split('T')[0]
+              ? getLocalDateString(existingOrder.createdAt)
+              : getLocalDateString()
           );
           setPaymentType(existingOrder.paymentType || (existingOrder.paymentStatus === 'paid' ? 'cash' : 'credit'));
           setDiscount(existingOrder.discount || 0);
@@ -359,7 +359,7 @@ export default function CreateOrder() {
                   className="form-input" 
                   value={orderDate}
                   onChange={e => setOrderDate(e.target.value)}
-                  max={new Date().toISOString().split('T')[0]}
+                  max={getLocalDateString()}
                 />
               </div>
 

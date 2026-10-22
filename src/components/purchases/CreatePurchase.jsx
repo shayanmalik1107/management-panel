@@ -7,7 +7,7 @@ import { createPurchase } from '../../services/purchaseService';
 import { getProducts, createProduct } from '../../services/productService';
 import { fetchAllCompanySuppliers } from '../../services/supplierService';
 import { getWarehouses, createWarehouse } from '../../services/warehouseService';
-import { formatCurrency } from '../../utils/formatters';
+import { formatCurrency, getLocalDateString } from '../../utils/formatters';
 import SupplierSelectDropdown from '../common/SupplierSelectDropdown';
 
 export default function CreatePurchase() {
@@ -30,7 +30,7 @@ export default function CreatePurchase() {
     supplierName: '',
     reference: '',
     notes: '',
-    date: new Date().toISOString().split('T')[0]
+    date: getLocalDateString()
   });
 
   // Purchased Line Items State
@@ -507,7 +507,7 @@ export default function CreatePurchase() {
                     className="form-input" 
                     value={form.date}
                     onChange={e => setForm({...form, date: e.target.value})}
-                    max={new Date().toISOString().split('T')[0]}
+                    max={getLocalDateString()}
                   />
                 </div>
 

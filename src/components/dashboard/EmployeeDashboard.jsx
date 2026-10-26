@@ -7,6 +7,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { formatCurrency, formatNumber, formatDate } from '../../utils/formatters';
 import { getDateRange, ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from '../../utils/constants';
 import { ShoppingCart, Plus, TrendingUp, Clock, Users, Store, CreditCard } from 'lucide-react';
+import WhatsAppButton from '../common/WhatsAppButton';
 
 
 export default function EmployeeDashboard() {
@@ -110,6 +111,7 @@ export default function EmployeeDashboard() {
           <p className="text-muted text-sm">Hello, {userProfile?.name}! Ready to get to work.</p>
         </div>
         <div className="page-header-actions">
+          <WhatsAppButton variant="header" userRole="Employee" />
           <button className="btn btn-secondary btn-lg" onClick={() => navigate('/customers/new')}>
             <Store size={18} /> Add Shop
           </button>

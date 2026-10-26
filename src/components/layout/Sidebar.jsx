@@ -21,6 +21,7 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { logout } from '../../services/authService';
 import { useToast } from '../../contexts/ToastContext';
+import WhatsAppButton from '../common/WhatsAppButton';
 
 export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }) {
   const { userProfile, companyInfo, isAdmin, currentUser } = useAuth();
@@ -136,6 +137,21 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
             </div>
           ))}
         </nav>
+
+        {/* WhatsApp Queries / Support in Side Drawer */}
+        <div style={{
+          padding: collapsed ? '8px 8px 10px' : '8px 14px 10px',
+          borderTop: 'var(--border)',
+        }}>
+          <WhatsAppButton
+            phoneNumber="03104824942"
+            variant="sidebar"
+            collapsed={collapsed}
+            label="WhatsApp Queries"
+            subLabel="03104824942"
+            userRole={isAdmin ? 'Admin' : 'Employee'}
+          />
+        </div>
 
         <div className="sidebar-footer">
           <div className="sidebar-user" onClick={handleLogout} title="Sign out">

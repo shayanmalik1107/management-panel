@@ -17,6 +17,7 @@ import OnboardingChecklist from '../onboarding/OnboardingChecklist';
 import DemoDataManager from './DemoDataManager';
 import { setupCompany } from '../../services/authService';
 import { useToast } from '../../contexts/ToastContext';
+import WhatsAppButton from '../common/WhatsAppButton';
 
 export default function AdminDashboard() {
   const { companyId, companyInfo, currentUser, userProfile, isAdmin } = useAuth();
@@ -421,6 +422,7 @@ export default function AdminDashboard() {
           <button className="btn btn-ghost btn-icon" onClick={() => { const v = dateRange; setDateRange(''); setTimeout(() => setDateRange(v), 10); }} title="Refresh">
             <RefreshCw size={16} />
           </button>
+          <WhatsAppButton variant="header" userRole="Admin" />
           <button className="btn btn-primary" onClick={() => navigate('/orders/new')}>
             <Plus size={16} /> New Order
           </button>

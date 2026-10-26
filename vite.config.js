@@ -6,6 +6,12 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
-    host: true
+    host: true,
+    proxy: {
+      '/api/otp': {
+        target: 'http://localhost:5199',
+        changeOrigin: true,
+      }
+    }
   }
 })

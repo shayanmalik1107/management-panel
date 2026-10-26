@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { selectUserPackage, requestPlanUpgrade, logout, calculateProratedUpgrade, schedulePlanDowngrade, cancelScheduledDowngrade } from '../../services/authService';
 import { useToast } from '../../contexts/ToastContext';
-import { Building2, CheckCircle2, ShieldCheck, Sparkles, LogOut, ArrowRight, ArrowLeft, Clock, MessageCircle, Calendar } from 'lucide-react';
+import { Building2, CheckCircle2, ShieldCheck, Sparkles, LogOut, ArrowRight, ArrowLeft, Clock, MessageCircle, Calendar, Zap, Shield } from 'lucide-react';
 import MaxPlanUpgradeModal from '../common/MaxPlanUpgradeModal';
+import TrialOtpModal from './TrialOtpModal';
 
 export default function PackageSelectionPage() {
   const { userProfile, currentUser } = useAuth();
@@ -12,13 +13,19 @@ export default function PackageSelectionPage() {
   const toast = useToast();
   const [loadingPlan, setLoadingPlan] = useState(null);
   const [showMaxUpgradeModal, setShowMaxUpgradeModal] = useState(false);
+  const [showTrialOtpModal, setShowTrialOtpModal] = useState(false);
 
   const isCurrentActive = userProfile?.accountStatus === 'active';
-  const currentPlanId = userProfile?.package?.planId || 'basic';
+  const isTrialActive = isCurrentActive && (
+    userProfile?.package?.planId === 'trial' ||
+    userProfile?.subscription?.isTrial ||
+    userProfile?.subscription?.planId === 'trial'
+  );
+  const currentPlanId = userProfile?.package?.planId || (isTrialActive ? 'trial' : 'basic');
   const isUpgradePending = userProfile?.upgradeRequest?.status === 'pending';
 
-  const isBasicActive = isCurrentActive && currentPlanId === 'basic';
-  const isProActive = isCurrentActive && currentPlanId === 'pro';
+  const isBasicActive = isCurrentActive && !isTrialActive && currentPlanId === 'basic';
+  const isProActive = isCurrentActive && !isTrialActive && currentPlanId === 'pro';
 
   const proratedInfo = useMemo(() => {
     if (isBasicActive && userProfile) {
@@ -36,7 +43,7 @@ export default function PackageSelectionPage() {
 
   const handleSelectPackage = async (planId) => {
     if (!userProfile?.uid) return;
-    if (isCurrentActive && planId === currentPlanId) return;
+    if (isCurrentActive && !isTrialActive && planId === currentPlanId) return;
     if (isProActive && planId === 'basic') return;
 
     setLoadingPlan(planId);
@@ -164,11 +171,158 @@ export default function PackageSelectionPage() {
         {/* Pricing Cards Grid */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-          gap: 32,
-          maxWidth: 900,
+          gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+          gap: 28,
+          maxWidth: 1060,
           margin: '0 auto',
         }}>
+          {/* 3-Day Free Trial Package (Rs 0 / Free) */}
+          <div style={{
+            background: '#ffffff',
+            borderRadius: 20,
+            border: isTrialActive ? '2px solid #2563eb' : '1px solid #e2e8f0',
+            padding: 30,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.05)',
+            position: 'relative',
+            transition: 'all 0.25s ease',
+          }}>
+            {isTrialActive ? (
+              <div style={{
+                position: 'absolute',
+                top: -14,
+                right: 24,
+                background: '#2563eb',
+                color: '#ffffff',
+                fontSize: 12,
+                fontWeight: 800,
+                padding: '4px 14px',
+                borderRadius: 20,
+                letterSpacing: '0.5px',
+                boxShadow: '0 4px 10px rgba(37, 99, 235, 0.3)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+              }}>
+                <CheckCircle2 size={13} /> CURRENT ACTIVE TRIAL
+              </div>
+            ) : (
+              <div style={{
+                position: 'absolute',
+                top: -14,
+                right: 24,
+                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                color: '#ffffff',
+                fontSize: 11,
+                fontWeight: 800,
+                padding: '4px 14px',
+                borderRadius: 20,
+                letterSpacing: '0.5px',
+                boxShadow: '0 4px 10px rgba(16, 185, 129, 0.3)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+              }}>
+                <Zap size={12} /> INSTANT ACCESS
+              </div>
+            )}
+
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <span style={{ fontSize: 14, fontWeight: 800, color: '#059669', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Free Trial
+                </span>
+                <span style={{
+                  fontSize: 12,
+                  fontWeight: 800,
+                  background: '#dcfce7',
+                  color: '#15803d',
+                  padding: '4px 12px',
+                  borderRadius: 20,
+                }}>
+                  3 Days
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 24 }}>
+                <span style={{ fontSize: 38, fontWeight: 900, color: '#0f172a' }}>Rs. 0</span>
+                <span style={{ fontSize: 14, color: '#64748b', fontWeight: 600 }}>/ 3 days free</span>
+              </div>
+
+              <p style={{ fontSize: 14, color: '#64748b', marginBottom: 24, lineHeight: 1.5 }}>
+                Test drive the full business management software instantly without any payment or waiting for admin approval.
+              </p>
+
+              <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 20, marginBottom: 28 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 14 }}>
+                  Trial Inclusions & Limits:
+                </div>
+                <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <li style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, color: '#334155' }}>
+                    <CheckCircle2 size={18} color="#10b981" /> <strong>Instant Start (No Approval)</strong>
+                  </li>
+                  <li style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, color: '#334155' }}>
+                    <CheckCircle2 size={18} color="#10b981" /> <strong>1 Company Workspace</strong>
+                  </li>
+                  <li style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, color: '#334155' }}>
+                    <CheckCircle2 size={18} color="#10b981" /> <strong>Up to 3 Employees</strong>
+                  </li>
+                  <li style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, color: '#334155' }}>
+                    <CheckCircle2 size={18} color="#10b981" /> <strong>Unlimited Products & Inventory</strong>
+                  </li>
+                  <li style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, color: '#334155' }}>
+                    <CheckCircle2 size={18} color="#10b981" /> <strong>Unlimited Orders & Ledgers</strong>
+                  </li>
+                  <li style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, color: '#059669', fontWeight: 700 }}>
+                    <Shield size={18} color="#059669" /> <strong>100% Data Preserved on Upgrade</strong>
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            <button
+              disabled={isTrialActive || isBasicActive || isProActive}
+              onClick={() => setShowTrialOtpModal(true)}
+              style={{
+                width: '100%',
+                padding: '14px 20px',
+                borderRadius: 12,
+                border: isTrialActive ? '1px solid #93c5fd' : (isBasicActive || isProActive) ? '1px solid #e2e8f0' : 'none',
+                background: isTrialActive
+                  ? '#eff6ff'
+                  : (isBasicActive || isProActive)
+                  ? '#f8fafc'
+                  : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                color: isTrialActive ? '#1e40af' : (isBasicActive || isProActive) ? '#94a3b8' : '#ffffff',
+                fontSize: 15,
+                fontWeight: 700,
+                cursor: (isTrialActive || isBasicActive || isProActive) ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                boxShadow: (isTrialActive || isBasicActive || isProActive) ? 'none' : '0 4px 14px rgba(16, 185, 129, 0.3)',
+                transition: 'all 0.2s',
+              }}
+            >
+              {isTrialActive ? (
+                <>
+                  <CheckCircle2 size={18} color="#2563eb" /> Current Active Trial
+                </>
+              ) : (isBasicActive || isProActive) ? (
+                <>
+                  <CheckCircle2 size={18} color="#94a3b8" /> Subscribed to Paid Plan
+                </>
+              ) : (
+                <>
+                  <Zap size={16} /> Start 3-Day Free Trial
+                </>
+              )}
+            </button>
+          </div>
+
           {/* Basic Package (Rs 5,000) */}
           {(() => {
             const isBasicActive = isCurrentActive && currentPlanId === 'basic';
@@ -291,7 +445,7 @@ export default function PackageSelectionPage() {
                     <span className="loading-spinner sm" style={{ width: 20, height: 20, borderTopColor: '#2563eb' }} />
                   ) : (
                     <>
-                      Select Basic Package <ArrowRight size={16} />
+                      {isTrialActive ? 'Upgrade to Basic Package (Rs 5,000)' : 'Select Basic Package'} <ArrowRight size={16} />
                     </>
                   )}
                 </button>
@@ -502,6 +656,15 @@ export default function PackageSelectionPage() {
       <MaxPlanUpgradeModal
         isOpen={showMaxUpgradeModal}
         onClose={() => setShowMaxUpgradeModal(false)}
+      />
+
+      <TrialOtpModal
+        isOpen={showTrialOtpModal}
+        onClose={() => setShowTrialOtpModal(false)}
+        userProfile={userProfile}
+        onSuccess={() => {
+          navigate('/select-company');
+        }}
       />
     </div>
   );

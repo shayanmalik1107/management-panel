@@ -1,8 +1,9 @@
-// App Layout — Main application shell with Sidebar + Navbar + Content
 import { useState, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
+import TrialCountdownBanner from './TrialCountdownBanner';
+import LambaVoiceAssistant from '../ai/LambaVoiceAssistant';
 
 export default function AppLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -28,6 +29,7 @@ export default function AppLayout() {
         onMobileClose={() => setMobileOpen(false)}
       />
       <div className={`main-content ${sidebarCollapsed ? 'collapsed' : ''}`}>
+        <TrialCountdownBanner />
         <Navbar
           onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
           onToggleMobile={() => setMobileOpen(!mobileOpen)}
@@ -36,6 +38,9 @@ export default function AppLayout() {
           <Outlet />
         </div>
       </div>
+
+      {/* Floating AI Voice & Visual Assistant */}
+      <LambaVoiceAssistant />
     </div>
   );
 }

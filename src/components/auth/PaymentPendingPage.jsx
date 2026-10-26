@@ -17,10 +17,59 @@ export default function PaymentPendingPage() {
 
   const [isCopied, setIsCopied] = useState(false);
   const [copiedKey, setCopiedKey] = useState('');
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState('');
+  const [txnId, setTxnId] = useState('');
+  const [uploadingProof, setUploadingProof] = useState(false);
 
   const isCurrentActive = userProfile?.accountStatus === 'active';
   const req = userProfile?.upgradeRequest;
   const isReqPending = req && req.status === 'pending';
+
+  const proofStatus = req?.paymentProof || userProfile?.paymentProof || null;
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Receipt image is too large. Please select an image under 5MB.');
+      return;
+    }
+    setSelectedFile(file);
+    const reader = new FileReader();
+    reader.onload = (uploadEvent) => {
+      setPreviewUrl(uploadEvent.target.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSubmitProof = async () => {
+    if (!selectedFile || !previewUrl || !userProfile?.uid) return;
+    setUploadingProof(true);
+    try {
+      const now = Date.now();
+      const proofData = {
+        image: previewUrl,
+        transactionId: txnId.trim() || '',
+        submittedAt: now,
+      };
+
+      const updates = {};
+      if (isReqPending) {
+        updates[`users/${userProfile.uid}/upgradeRequest/paymentProof`] = proofData;
+      }
+      updates[`users/${userProfile.uid}/paymentProof`] = proofData;
+
+      await update(ref(database), updates);
+      toast.success('🎉 Payment receipt successfully submitted to Control Panel for review!');
+      setSelectedFile(null);
+    } catch (err) {
+      console.error('Failed to upload proof:', err);
+      toast.error('Failed to submit receipt proof. Please try again.');
+    } finally {
+      setUploadingProof(false);
+    }
+  };
 
   // Selected package details: show requested upgrade/renewal package if request is pending
   const targetPlanName = isReqPending
@@ -449,15 +498,129 @@ export default function PaymentPendingPage() {
               </div>
             </div>
 
+            {/* In-App Payment Screenshot Uploader */}
+            <div style={{
+              background: '#f8fafc',
+              border: '2px dashed #cbd5e1',
+              borderRadius: 16,
+              padding: 20,
+              marginTop: 20,
+            }}>
+              <div style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Sparkles size={16} color="#2563eb" /> Direct In-App Screenshot Upload
+              </div>
+              <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 14px 0' }}>
+                Upload your payment slip or receipt directly here for expedited instant verification.
+              </p>
+
+              {proofStatus ? (
+                <div style={{
+                  background: '#f0fdf4',
+                  border: '1px solid #bbf7d0',
+                  borderRadius: 12,
+                  padding: 14,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                }}>
+                  <CheckCircle2 size={24} color="#16a34a" />
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: '#166534' }}>
+                      Payment Proof Received!
+                    </div>
+                    <div style={{ fontSize: 12, color: '#15803d' }}>
+                      {proofStatus.transactionId ? `Ref/TID: ${proofStatus.transactionId} • ` : ''}Submitted on {new Date(proofStatus.submittedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. Verification in progress.
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+                    <div style={{ flex: 1, minWidth: 200 }}>
+                      <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 4 }}>
+                        Transaction / Reference ID (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. TID-10928374 or Bank Ref"
+                        value={txnId}
+                        onChange={(e) => setTxnId(e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '10px 12px',
+                          borderRadius: 8,
+                          border: '1px solid #cbd5e1',
+                          fontSize: 13,
+                          outline: 'none',
+                        }}
+                      />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 200 }}>
+                      <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 4 }}>
+                        Payment Receipt Image
+                      </label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleFileSelect}
+                        style={{
+                          width: '100%',
+                          padding: '8px',
+                          borderRadius: 8,
+                          border: '1px solid #cbd5e1',
+                          fontSize: 12,
+                          background: '#ffffff',
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {previewUrl && (
+                    <div style={{ marginBottom: 14, textAlign: 'center' }}>
+                      <img
+                        src={previewUrl}
+                        alt="Receipt Preview"
+                        style={{ maxHeight: 180, maxWidth: '100%', borderRadius: 8, border: '1px solid #e2e8f0', objectFit: 'contain' }}
+                      />
+                    </div>
+                  )}
+
+                  <button
+                    disabled={!selectedFile || uploadingProof}
+                    onClick={handleSubmitProof}
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      borderRadius: 10,
+                      border: 'none',
+                      background: (!selectedFile || uploadingProof) ? '#cbd5e1' : 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
+                      color: '#ffffff',
+                      fontSize: 14,
+                      fontWeight: 800,
+                      cursor: (!selectedFile || uploadingProof) ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 8,
+                      boxShadow: (!selectedFile || uploadingProof) ? 'none' : '0 4px 12px rgba(22, 163, 74, 0.3)',
+                    }}
+                  >
+                    <Send size={16} /> {uploadingProof ? 'Uploading Receipt Proof...' : 'Submit Payment Proof'}
+                  </button>
+                </div>
+              )}
+            </div>
+
             {/* Instruction Step Banner */}
             <div style={{
               background: '#f0fdf4',
               border: '1px solid #bbf7d0',
               borderRadius: 12,
               padding: 16,
+              marginTop: 16,
             }}>
               <div style={{ fontSize: 13, fontWeight: 800, color: '#166534', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Send size={15} /> How to send payment screenshot:
+                <Send size={15} /> Alternate Option (WhatsApp / Email):
               </div>
               <ol style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: '#14532d', lineHeight: 1.5 }}>
                 <li>Take a clear screenshot of the payment receipt.</li>

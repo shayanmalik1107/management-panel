@@ -23,9 +23,14 @@ export default function BillingPage() {
   const [showMaxUpgradeModal, setShowMaxUpgradeModal] = useState(false);
 
   const isCurrentActive = userProfile?.accountStatus === 'active';
-  const currentPlanId = userProfile?.package?.planId || 'basic';
-  const isBasicActive = isCurrentActive && currentPlanId === 'basic';
-  const isProActive = isCurrentActive && currentPlanId === 'pro';
+  const isTrialActive = isCurrentActive && (
+    userProfile?.package?.planId === 'trial' ||
+    userProfile?.subscription?.isTrial ||
+    userProfile?.subscription?.planId === 'trial'
+  );
+  const currentPlanId = userProfile?.package?.planId || (isTrialActive ? 'trial' : 'basic');
+  const isBasicActive = isCurrentActive && !isTrialActive && currentPlanId === 'basic';
+  const isProActive = isCurrentActive && !isTrialActive && currentPlanId === 'pro';
 
   const isAnyRequestPending = userProfile?.upgradeRequest?.status === 'pending';
   const pendingPlanId = isAnyRequestPending ? userProfile?.upgradeRequest?.requestedPlanId : null;
@@ -47,7 +52,7 @@ export default function BillingPage() {
     const start = sub.startDate || userProfile?.approvedAt || userProfile?.createdAt || now;
     const extra = sub.extraDaysPassed || 0;
     const todayTime = now + (extra * oneDayMs);
-    const expTime = sub.expiryDate || (start + 30 * oneDayMs);
+    const expTime = sub.expiryDate || (start + (isTrialActive ? 3 : 30) * oneDayMs);
 
     const startStr = new Date(start).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
     const todayStr = new Date(todayTime).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -57,7 +62,7 @@ export default function BillingPage() {
     const expired = sub.status === 'expired' || todayTime >= expTime || remDays <= 0;
 
     return { todayDateStr: todayStr, startDateStr: startStr, expiryDateStr: expStr, daysRemaining: remDays, isExpired: expired };
-  }, [sub, userProfile]);
+  }, [sub, userProfile, isTrialActive]);
 
   const maxComp = userProfile?.maxCompanies || userProfile?.package?.maxCompanies || 1;
 
@@ -191,13 +196,18 @@ export default function BillingPage() {
             Active Subscription Plan
           </div>
           <div style={{ fontSize: 22, fontWeight: 900, color: '#0f172a', marginBottom: 4 }}>
-            {userProfile?.package?.name || (isProActive ? 'Pro Multi-Company Package' : 'Basic Package')}
+            {isTrialActive ? '3-Day Free Trial' : (userProfile?.package?.name || (isProActive ? 'Pro Multi-Company Package' : 'Basic Package'))}
           </div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#2563eb' }}>
-            Rs. {(userProfile?.package?.price || (isProActive ? 10000 : 5000)).toLocaleString()} / month
+          <div style={{ fontSize: 14, fontWeight: 700, color: isTrialActive ? '#16a34a' : '#2563eb' }}>
+            {isTrialActive ? 'Rs. 0 (Free Trial - 3 Days)' : `Rs. ${(userProfile?.package?.price ?? (isProActive ? 10000 : 5000)).toLocaleString()} / month`}
           </div>
-          <div style={{ borderTop: '1px solid #f1f5f9', marginTop: 16, paddingTop: 12, fontSize: 13, color: '#475569', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ borderTop: '1px solid #f1f5f9', marginTop: 16, paddingTop: 12, fontSize: 13, color: '#475569', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             <Building2 size={15} color="#6366f1" /> Allowed Workspaces: <strong>{maxComp} Slot{maxComp > 1 ? 's' : ''}</strong>
+            {isTrialActive && (
+              <span style={{ color: '#059669', fontSize: 12, fontWeight: 700, background: '#dcfce7', padding: '2px 8px', borderRadius: 12 }}>
+                Trial: Max 3 Staff
+              </span>
+            )}
           </div>
         </div>
 
@@ -326,7 +336,41 @@ export default function BillingPage() {
               </ul>
             </div>
 
-            {isBasicActive ? (
+            {isTrialActive ? (
+              isBasicPending ? (
+                <button disabled style={{ width: '100%', padding: '14px', borderRadius: 10, border: 'none', background: '#fef3c7', color: '#b45309', fontWeight: 800, cursor: 'not-allowed' }}>
+                  <Clock size={16} style={{ display: 'inline', marginRight: 6 }} /> Upgrade to Basic Pending Review
+                </button>
+              ) : isProPending ? (
+                <button disabled style={{ width: '100%', padding: '14px', borderRadius: 10, border: '1px solid #fed7aa', background: '#fff7ed', color: '#c2410c', fontSize: 13, fontWeight: 700, cursor: 'not-allowed' }}>
+                  <Lock size={15} style={{ display: 'inline', marginRight: 6 }} /> Pro Upgrade Request Under Review
+                </button>
+              ) : (
+                <button
+                  disabled={loading}
+                  onClick={() => handleRenewPlan('basic')}
+                  style={{
+                    width: '100%',
+                    padding: '14px',
+                    borderRadius: 10,
+                    border: 'none',
+                    background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                    color: '#ffffff',
+                    fontSize: 14,
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    boxShadow: '0 4px 14px rgba(37, 99, 235, 0.3)',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  Upgrade to Basic Plan (Rs. 5,000) <ArrowRight size={16} />
+                </button>
+              )
+            ) : isBasicActive ? (
               daysRemaining <= 4 ? (
                 isBasicPending ? (
                   <button disabled style={{ width: '100%', padding: '12px', borderRadius: 10, border: 'none', background: '#fef3c7', color: '#b45309', fontWeight: 800, cursor: 'not-allowed' }}>
@@ -387,7 +431,30 @@ export default function BillingPage() {
                   Mid-month immediate downgrade is not allowed. Change takes effect on renewal date.
                 </div>
               </div>
-            ) : null}
+            ) : (
+              <button
+                disabled={loading}
+                onClick={() => handleRenewPlan('basic')}
+                style={{
+                  width: '100%',
+                  padding: '14px',
+                  borderRadius: 10,
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                  color: '#ffffff',
+                  fontSize: 14,
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  boxShadow: '0 4px 14px rgba(37, 99, 235, 0.3)',
+                }}
+              >
+                Select Basic Plan (Rs. 5,000) <ArrowRight size={16} />
+              </button>
+            )}
           </div>
 
           {/* Pro Multi-Company Plan Card */}

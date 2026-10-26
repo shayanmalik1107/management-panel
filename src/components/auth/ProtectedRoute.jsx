@@ -122,15 +122,19 @@ export function ProtectedRoute({ children }) {
               fontWeight: 800,
               marginBottom: 14,
             }}>
-              🔒 SUBSCRIPTION EXPIRED
+              {sub?.planId === 'trial' || sub?.isTrial ? '⌛ 3-DAY FREE TRIAL ENDED' : '🔒 SUBSCRIPTION EXPIRED'}
             </div>
 
             <h2 style={{ fontSize: 26, fontWeight: 800, margin: '0 0 10px 0', letterSpacing: '-0.5px' }}>
-              Your Business Subscription Has Ended
+              {sub?.planId === 'trial' || sub?.isTrial
+                ? 'Your 3-Day Free Trial Has Concluded'
+                : 'Your Business Subscription Has Ended'}
             </h2>
 
             <p style={{ fontSize: 14, color: '#64748b', lineHeight: 1.6, marginBottom: 24 }}>
-              Your subscription plan expired on <strong>{expDateStr}</strong>. Your business data, inventory, orders, and company workspaces are completely safe and preserved. Please choose a renewal option below to reactivate workspace access.
+              {sub?.planId === 'trial' || sub?.isTrial
+                ? <>Your 3-day free trial expired on <strong>{expDateStr}</strong>. Your business records, orders, inventory items, and company workspace are <strong>completely safe and preserved</strong>. Choose any plan below to continue seamlessly right where you left off.</>
+                : <>Your subscription plan expired on <strong>{expDateStr}</strong>. Your business data, inventory, orders, and company workspaces are completely safe and preserved. Please choose a renewal option below to reactivate workspace access.</>}
             </p>
 
             {/* Renewal Options */}

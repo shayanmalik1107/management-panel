@@ -8,13 +8,17 @@ import { useToast } from '../../contexts/ToastContext';
 import { formatDate } from '../../utils/formatters';
 
 export default function EmployeesList() {
-  const { companyId, companyInfo, isAdmin, currentUser } = useAuth();
+  const { companyId, companyInfo, isAdmin, currentUser, userProfile } = useAuth();
   const toast = useToast();
   
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [loadingCode, setLoadingCode] = useState(false);
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  const isTrial = userProfile?.package?.planId === 'trial' || userProfile?.subscription?.isTrial;
+  const staffCount = employees.filter(e => e.role !== 'admin' && e.uid !== currentUser?.uid).length;
+  const isTrialLimitReached = isTrial && staffCount >= 3;
 
   useEffect(() => {
     if (!companyId) return;
@@ -101,17 +105,73 @@ export default function EmployeesList() {
     <div>
       <div className="page-header">
         <div className="page-header-left">
-          <h1>Team / Employees</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <h1 style={{ margin: 0 }}>Team / Employees</h1>
+            {isTrial && (
+              <span style={{
+                fontSize: 12,
+                fontWeight: 800,
+                background: isTrialLimitReached ? '#fee2e2' : '#e0f2fe',
+                color: isTrialLimitReached ? '#b91c1c' : '#0369a1',
+                border: isTrialLimitReached ? '1px solid #fca5a5' : '1px solid #bae6fd',
+                padding: '3px 10px',
+                borderRadius: 20,
+              }}>
+                Trial Limit: {staffCount} / 3 Staff
+              </span>
+            )}
+          </div>
           <p className="text-muted text-sm">Manage staff access, roles, and permissions</p>
         </div>
         <div className="page-header-actions">
           {isAdmin && (
-            <button className="btn btn-primary" onClick={() => setShowInviteModal(true)}>
+            <button
+              className="btn btn-primary"
+              onClick={() => {
+                if (isTrialLimitReached) {
+                  toast.error('Trial account limit reached (3/3 staff). Please upgrade to a paid package to invite more staff members.');
+                } else {
+                  setShowInviteModal(true);
+                }
+              }}
+              style={isTrialLimitReached ? { opacity: 0.7 } : {}}
+            >
               <Plus size={16} /> Invite Employee
             </button>
           )}
         </div>
       </div>
+
+      {isTrial && isTrialLimitReached && (
+        <div style={{
+          background: '#fef3c7',
+          border: '1px solid #fde68a',
+          borderRadius: 'var(--radius-md)',
+          padding: '12px 16px',
+          marginBottom: 16,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          color: '#92400e',
+          fontSize: 13,
+        }}>
+          <div>
+            <strong>Trial Staff Limit Reached:</strong> You have reached the maximum allowed 3 employees for the 3-Day Free Trial. Upgrade to a paid plan for unlimited staff accounts.
+          </div>
+          <a
+            href="/select-package"
+            style={{
+              fontWeight: 800,
+              color: '#1d4ed8',
+              textDecoration: 'underline',
+              whiteSpace: 'nowrap',
+              marginLeft: 12,
+            }}
+          >
+            Upgrade Plan →
+          </a>
+        </div>
+      )}
 
       <div className="card">
         <div className="table-container">

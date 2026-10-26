@@ -104,6 +104,80 @@ export function calculateProratedUpgrade(userProfile) {
 }
 
 /**
+ * Start 3-Day Free Trial for Admin
+ * Instantly activates account without waiting for approval
+ */
+export async function startTrialSubscription(uid, verifiedIdentifier) {
+  const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
+  const now = Date.now();
+  const expiryDate = now + threeDaysMs;
+
+  const packageData = {
+    planId: 'trial',
+    name: '3-Day Free Trial',
+    price: 0,
+    maxCompanies: 1,
+    maxEmployees: 3,
+    status: 'active',
+    selectedAt: now,
+  };
+
+  const subscriptionData = {
+    startDate: now,
+    expiryDate: expiryDate,
+    planId: 'trial',
+    price: 0,
+    status: 'active',
+    extraDaysPassed: 0,
+    isTrial: true,
+    maxCompanies: 1,
+    maxEmployees: 3,
+    lastApprovedAt: now,
+  };
+
+  const isEmail = String(verifiedIdentifier).includes('@');
+  const safeKey = String(verifiedIdentifier).replace(/[^\w]/g, '_');
+
+  const updates = {};
+  updates[`users/${uid}/accountStatus`] = 'active';
+  updates[`users/${uid}/approvalStatus`] = 'approved';
+  updates[`users/${uid}/package`] = packageData;
+  updates[`users/${uid}/subscription`] = subscriptionData;
+  updates[`users/${uid}/maxCompanies`] = 1;
+  if (isEmail) {
+    updates[`users/${uid}/verifiedTrialEmail`] = verifiedIdentifier;
+  } else {
+    updates[`users/${uid}/phone`] = verifiedIdentifier;
+  }
+  updates[`users/${uid}/trialInfo`] = {
+    verifiedWith: isEmail ? 'email' : 'phone',
+    email: isEmail ? verifiedIdentifier : '',
+    phone: !isEmail ? verifiedIdentifier : '',
+    activatedAt: now,
+    isTrial: true,
+  };
+
+  // Anti-abuse tracking record in database
+  if (isEmail) {
+    updates[`trialEmails/${safeKey}`] = {
+      uid,
+      email: verifiedIdentifier,
+      claimedAt: now,
+    };
+  } else {
+    updates[`trialPhones/${safeKey}`] = {
+      uid,
+      phone: verifiedIdentifier,
+      claimedAt: now,
+    };
+  }
+
+  const dbRef = ref(database);
+  await update(dbRef, updates);
+  return { package: packageData, subscription: subscriptionData };
+}
+
+/**
  * Select Package for Admin
  */
 export async function selectUserPackage(uid, planId) {
@@ -133,6 +207,7 @@ export async function selectUserPackage(uid, planId) {
 export async function requestPlanUpgrade(uid, targetPlanId, userProfile = null) {
   const isPro = targetPlanId === 'pro';
   const targetMaxCompanies = isPro ? 3 : 1;
+  const isTrial = userProfile?.package?.planId === 'trial' || userProfile?.subscription?.isTrial;
 
   let prorated = null;
   if (userProfile && targetPlanId === 'pro' && userProfile?.package?.planId === 'basic') {
@@ -142,7 +217,7 @@ export async function requestPlanUpgrade(uid, targetPlanId, userProfile = null) 
   const updates = {};
   updates[`users/${uid}/upgradeRequest`] = {
     requestedPlanId: targetPlanId,
-    requestedPackageName: isPro ? 'Pro Multi-Company Package' : 'Basic Package Renewal',
+    requestedPackageName: isPro ? 'Pro Multi-Company Package' : (isTrial ? 'Basic Package Upgrade' : 'Basic Package Renewal'),
     requestedPrice: prorated ? prorated.proratedCharge : (isPro ? 10000 : 5000),
     requestedMaxCompanies: targetMaxCompanies,
     prorated: isPro ? (prorated || null) : null,
@@ -415,6 +490,31 @@ export async function registerEmployee({ name, email, password, adminCode }) {
 
   if (companyInfo?.status === 'closed' || companyInfo?.status === 'disabled') {
     throw new Error('This company workspace is currently closed by System Control. Registration is not allowed.');
+  }
+
+  // Step 2b: Verify trial employee limits (Trial account is limited to 3 employees)
+  if (adminUid) {
+    const adminRef = ref(database, `users/${adminUid}`);
+    const adminSnap = await get(adminRef);
+    if (adminSnap.exists()) {
+      const adminData = adminSnap.val();
+      const isTrial = adminData.package?.planId === 'trial' || adminData.subscription?.isTrial;
+      if (isTrial) {
+        const empSnap = await get(ref(database, `companies/${companyId}/employees`));
+        if (empSnap.exists()) {
+          const staffCount = [];
+          empSnap.forEach((c) => {
+            const val = c.val();
+            if (val.role !== 'admin' && c.key !== adminUid) {
+              staffCount.push(c.key);
+            }
+          });
+          if (staffCount.length >= 3) {
+            throw new Error('This company is on a 3-Day Free Trial which is limited to a maximum of 3 employees. Please contact your administrator to upgrade their package.');
+          }
+        }
+      }
+    }
   }
 
   // Step 3: Create auth account

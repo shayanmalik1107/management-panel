@@ -14,6 +14,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
 import OnboardingChecklist from '../onboarding/OnboardingChecklist';
+import DemoDataManager from './DemoDataManager';
 import { setupCompany } from '../../services/authService';
 import { useToast } from '../../contexts/ToastContext';
 
@@ -100,7 +101,7 @@ export default function AdminDashboard() {
 
       let totalCustomerCreditLeft = 0;
       latestCustomers.forEach(c => {
-        if (c) totalCustomerCreditLeft += Number(c.currentBalance) || 0;
+        if (c) totalCustomerCreditLeft += Number(c.currentBalance ?? c.balance ?? c.dueAmount ?? 0) || 0;
       });
 
       let cogs = 0;
@@ -395,6 +396,9 @@ export default function AdminDashboard() {
     <div>
       {/* Onboarding */}
       <OnboardingChecklist />
+
+      {/* 1-Click Demo Data Creator */}
+      <DemoDataManager />
 
       {/* Page Header */}
       <div className="page-header">

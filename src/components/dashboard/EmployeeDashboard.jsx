@@ -81,7 +81,7 @@ export default function EmployeeDashboard() {
           const val = child.val();
           if (val) {
             if (val.createdBy === uid) customersAdded++;
-            totalCreditLeft += (Number(val.currentBalance) || 0);
+            totalCreditLeft += Number(val.currentBalance ?? val.balance ?? val.dueAmount ?? 0) || 0;
           }
         });
       }

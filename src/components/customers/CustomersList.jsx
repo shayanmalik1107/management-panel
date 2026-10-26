@@ -139,8 +139,8 @@ export default function CustomersList() {
                   </td>
                   <td onClick={() => navigate(`/customers/${customer.id}`)} style={{ cursor: 'pointer' }}>{customer.totalOrders || 0}</td>
                   {canViewBalance && (
-                    <td onClick={() => navigate(`/customers/${customer.id}`)} style={{ cursor: 'pointer' }} className="font-medium" style={{ color: customer.currentBalance > 0 ? 'var(--warning-600)' : 'inherit' }}>
-                      {formatCurrency(customer.currentBalance, currency)}
+                    <td onClick={() => navigate(`/customers/${customer.id}`)} style={{ cursor: 'pointer', color: (Number(customer.currentBalance ?? customer.balance) || 0) > 0 ? 'var(--warning-600)' : 'inherit' }} className="font-medium">
+                      {formatCurrency(customer.currentBalance ?? customer.balance ?? 0, currency)}
                     </td>
                   )}
                   <td onClick={() => navigate(`/customers/${customer.id}`)} style={{ cursor: 'pointer' }} className="text-sm text-muted">

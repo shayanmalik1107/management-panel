@@ -22,3 +22,13 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Local artifacts & tool outputs
+brag-output/
+.agents/
+skills-lock.json

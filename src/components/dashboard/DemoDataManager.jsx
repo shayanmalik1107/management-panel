@@ -6,22 +6,52 @@ import { useToast } from '../../contexts/ToastContext';
 import { Sparkles, Trash2, CheckCircle2, Box, Database, RefreshCw, AlertCircle } from 'lucide-react';
 
 export default function DemoDataManager() {
-  const { companyId } = useAuth();
+  const { companyId, userProfile } = useAuth();
   const toast = useToast();
   const [loading, setLoading] = useState(false);
   const [hasDemoData, setHasDemoData] = useState(false);
   const [checking, setChecking] = useState(true);
 
+  // Strictly check if user is in 3-day free trial mode
+  const isTrialActive = Boolean(
+    userProfile?.subscription?.isTrial ||
+    userProfile?.subscription?.planId === 'trial' ||
+    userProfile?.package?.planId === 'trial'
+  );
+
   useEffect(() => {
     if (!companyId) return;
+
+    // If user is on a paid plan (Basic, Pro, etc.), automatically purge leftover demo data!
+    if (!isTrialActive) {
+      const checkRef = ref(database, `companies/${companyId}/isDemoDataActive`);
+      get(checkRef).then(async (snap) => {
+        if (snap.exists() && snap.val() === true) {
+          const updates = {};
+          const demoKeys = [
+            'products/demo_prod_1', 'products/demo_prod_2', 'products/demo_prod_3', 'products/demo_prod_4', 'products/demo_prod_5',
+            'customers/demo_cust_1', 'customers/demo_cust_2', 'customers/demo_cust_3',
+            'orders/demo_ord_1', 'orders/demo_ord_2', 'orders/demo_ord_3', 'orders/demo_ord_4',
+          ];
+          demoKeys.forEach(k => {
+            updates[`companies/${companyId}/${k}`] = null;
+          });
+          updates[`companies/${companyId}/isDemoDataActive`] = null;
+          await update(ref(database), updates);
+        }
+      }).catch(console.error);
+      return;
+    }
+
     const checkRef = ref(database, `companies/${companyId}/isDemoDataActive`);
     get(checkRef).then((snap) => {
       setHasDemoData(snap.exists() && snap.val() === true);
       setChecking(false);
     }).catch(() => setChecking(false));
-  }, [companyId]);
+  }, [companyId, isTrialActive]);
 
-  if (!companyId || checking) return null;
+  // Completely hide banner on Basic, Pro, or any non-trial plan
+  if (!companyId || !isTrialActive || checking) return null;
 
   const handleLoadDemoData = async () => {
     setLoading(true);

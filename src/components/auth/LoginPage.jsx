@@ -1,8 +1,8 @@
 // Login Page
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Building2, Mail, Lock, Eye, EyeOff } from 'lucide-react';
-import { loginWithEmail, loginWithGoogle, getUserProfile } from '../../services/authService';
+import { loginWithEmail, loginWithGoogle, getUserProfile, handleGoogleRedirectResult, ensureAdminProfile } from '../../services/authService';
 import { getAuthErrorMessage } from '../../utils/validators';
 import { useToast } from '../../contexts/ToastContext';
 
@@ -13,6 +13,52 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // Check for returning Google Redirect auth result (especially on mobile & live)
+  useEffect(() => {
+    let active = true;
+    const processRedirect = async () => {
+      try {
+        const result = await handleGoogleRedirectResult();
+        if (!result || !active) return;
+
+        setLoading(true);
+        const { profile, isNewUser } = result;
+
+        if (profile?.status === 'disabled') {
+          toast.error('Your account has been disabled. Contact your administrator.');
+          setLoading(false);
+          return;
+        }
+
+        if (isNewUser || profile?.accountStatus === 'select_package') {
+          toast.success('Welcome to LAMBA! Please select your workspace package.');
+          navigate('/select-package');
+          return;
+        }
+
+        if (profile?.accountStatus === 'pending_approval') {
+          navigate('/payment-pending');
+          return;
+        }
+
+        toast.success('Welcome back!');
+        if (profile?.role === 'admin') {
+          navigate('/select-company');
+        } else {
+          navigate('/dashboard');
+        }
+      } catch (err) {
+        if (!active) return;
+        console.error('Google Redirect error:', err);
+        toast.error(getAuthErrorMessage(err.code));
+        setLoading(false);
+      }
+    };
+
+    processRedirect();
+    return () => { active = false; };
+  }, [navigate, toast]);
 
   const handleEmailLogin = async (e) => {
     e.preventDefault();
@@ -55,18 +101,35 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const user = await loginWithGoogle();
-      const profile = await getUserProfile(user.uid);
+      if (!user) {
+        // Redirect initiated on mobile / popup-block
+        return;
+      }
+
+      let profile = await getUserProfile(user.uid);
       
       if (!profile) {
-        // New Google user - redirect to register
-        toast.info('Please complete your registration.');
-        navigate('/register');
+        // Auto-create initial admin profile so new Google user can immediately select package
+        profile = await ensureAdminProfile(user);
+        toast.success('Welcome to LAMBA! Please select your workspace package.');
+        navigate('/select-package');
         return;
       }
 
       if (profile.status === 'disabled') {
         toast.error('Your account has been disabled. Contact your administrator.');
         setLoading(false);
+        return;
+      }
+
+      if (profile.accountStatus === 'select_package') {
+        toast.success('Welcome to LAMBA! Please select your package.');
+        navigate('/select-package');
+        return;
+      }
+
+      if (profile.accountStatus === 'pending_approval') {
+        navigate('/payment-pending');
         return;
       }
 

@@ -37,7 +37,9 @@ export default function AdminDashboard() {
     totalExpenses: 0, totalPurchases: 0, netProfit: 0,
     outstanding: 0, lowStockCount: 0,
     paymentsMade: 0, outstandingPayable: 0,
-    totalCustomerCreditLeft: 0
+    totalCustomerCreditLeft: 0,
+    totalCogs: 0,
+    grossProfit: 0
   });
   const [recentOrders, setRecentOrders] = useState([]);
   const [recentActivity, setRecentActivity] = useState([]);
@@ -108,16 +110,49 @@ export default function AdminDashboard() {
       let cogs = 0;
       activeOrders.forEach(order => {
         if (order && order.items) {
-          Object.values(order.items).forEach(item => {
+          const rawItems = Array.isArray(order.items) ? order.items : Object.values(order.items);
+          rawItems.forEach(item => {
             if (!item) return;
-            cogs += (item.costPriceAtSale || 0) * (item.quantity || 0);
+
+            // Find matching product in catalog if costPriceAtSale is missing or 0
+            const productMatch = latestProducts.find(p => 
+              (item.productId && p.id === item.productId) || 
+              (item.sku && p.sku && String(p.sku).trim().toLowerCase() === String(item.sku).trim().toLowerCase()) ||
+              (item.productName && p.name && String(p.name).trim().toLowerCase() === String(item.productName).trim().toLowerCase())
+            );
+
+            const costPriceAtSale = Number(item.costPriceAtSale);
+            const itemPurchasePrice = Number(item.purchasePrice);
+            const itemCostPrice = Number(item.costPrice);
+            const itemCost = Number(item.cost);
+            const catalogPurchasePrice = Number(productMatch?.purchasePrice);
+            const catalogCostPrice = Number(productMatch?.costPrice);
+
+            const unitCost = costPriceAtSale > 0 
+              ? costPriceAtSale 
+              : (itemPurchasePrice > 0 
+                ? itemPurchasePrice 
+                : (itemCostPrice > 0 
+                  ? itemCostPrice 
+                  : (itemCost > 0 
+                    ? itemCost 
+                    : (catalogPurchasePrice > 0 
+                      ? catalogPurchasePrice 
+                      : (catalogCostPrice > 0 
+                        ? catalogCostPrice 
+                        : 0)))));
+
+            const qty = Math.max(0, (Number(item.quantity) || 0) - (Number(item.returnedQty || item.returnedQuantity) || 0));
+            cogs += unitCost * qty;
+
             const pid = item.productId || 'unknown';
             if (!productSales[pid]) productSales[pid] = { name: item.productName || 'Unnamed', total: 0, qty: 0 };
-            productSales[pid].total += item.lineTotal || 0;
-            productSales[pid].qty += item.quantity || 0;
+            productSales[pid].total += Number(item.lineTotal) || (Number(item.salePrice || 0) * qty);
+            productSales[pid].qty += qty;
           });
         }
       });
+      const grossProfit = totalSales - cogs;
       const netProfit = totalSales - cogs - totalExpenses;
 
       const topProds = Object.values(productSales).sort((a, b) => b.total - a.total).slice(0, 5);
@@ -148,7 +183,7 @@ export default function AdminDashboard() {
       const recent = [...latestOrders].sort((a, b) => b.createdAt - a.createdAt).slice(0, 8);
       const outstandingPayable = totalPurchases - paymentsMade;
 
-      setStats({ totalSales, paymentsReceived, totalOrders: activeOrders.length, totalExpenses, totalPurchases, netProfit, outstanding, lowStockCount, paymentsMade, outstandingPayable, totalCustomerCreditLeft, rawOrdersCount: latestOrders.length, rawOrders: latestOrders.map(o => o.orderNumber).join(', '), snapCount: debugSnapCount });
+      setStats({ totalSales, paymentsReceived, totalOrders: activeOrders.length, totalExpenses, totalPurchases, totalCogs: cogs, grossProfit, netProfit, outstanding, lowStockCount, paymentsMade, outstandingPayable, totalCustomerCreditLeft, rawOrdersCount: latestOrders.length, rawOrders: latestOrders.map(o => o.orderNumber).join(', '), snapCount: debugSnapCount });
       setRecentOrders(recent);
       setChartData(chartArr);
       setTopProducts(topProds);
@@ -521,6 +556,29 @@ export default function AdminDashboard() {
           <div className="stat-card-value" style={{ color: stats.netProfit >= 0 ? 'var(--success-600)' : 'var(--danger-600)' }}>
             {loading ? '...' : formatCurrency(stats.netProfit, currency)}
           </div>
+          <div className="text-xs text-muted mt-1">
+            {stats.totalSales > 0 ? `${((stats.netProfit / stats.totalSales) * 100).toFixed(1)}% profit margin` : 'Revenue - Cost - Expenses'}
+          </div>
+        </div>
+
+        <div className="stat-card">
+          <div className="stat-card-header">
+            <span className="stat-card-label">Cost of Products (Orders)</span>
+            <div className="stat-card-icon blue"><Package size={18} /></div>
+          </div>
+          <div className="stat-card-value">{loading ? '...' : formatCurrency(stats.totalCogs, currency)}</div>
+          <div className="text-xs text-muted mt-1">Total product cost of all active orders</div>
+        </div>
+
+        <div className="stat-card">
+          <div className="stat-card-header">
+            <span className="stat-card-label">Gross Profit</span>
+            <div className="stat-card-icon purple"><DollarSign size={18} /></div>
+          </div>
+          <div className="stat-card-value" style={{ color: stats.grossProfit >= 0 ? 'var(--primary-600)' : 'var(--danger-600)' }}>
+            {loading ? '...' : formatCurrency(stats.grossProfit, currency)}
+          </div>
+          <div className="text-xs text-muted mt-1">Total Sales - Cost of Products</div>
         </div>
         
         <div className="stat-card">
@@ -529,6 +587,7 @@ export default function AdminDashboard() {
             <div className="stat-card-icon red"><Receipt size={18} /></div>
           </div>
           <div className="stat-card-value">{loading ? '...' : formatCurrency(stats.totalExpenses, currency)}</div>
+          <div className="text-xs text-muted mt-1">Total operational expenses</div>
         </div>
       </div>
 

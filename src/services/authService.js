@@ -3,6 +3,8 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut,
   updateProfile,
 } from 'firebase/auth';
@@ -21,22 +23,63 @@ import { generateJoinCode, generateId } from '../utils/codeGenerator';
 import { DEFAULT_PERMISSIONS } from '../utils/constants';
 
 /**
+ * Check if the current browser environment is a mobile device or tablet
+ */
+export function isMobileBrowser() {
+  if (typeof window === 'undefined') return false;
+  const ua = navigator.userAgent || navigator.vendor || window.opera || '';
+  const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile|CriOS/i.test(ua);
+  const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+  const isSmallScreen = window.innerWidth <= 768;
+  return isMobileUA || (isTouchDevice && isSmallScreen);
+}
+
+/**
+ * Ensure an Admin record exists in the database
+ */
+export async function ensureAdminProfile(user, customData = {}) {
+  if (!user || !user.uid) return null;
+  const existing = await getUserProfile(user.uid);
+  if (existing) return existing;
+
+  const newProfile = {
+    name: customData.name || user.displayName || user.email?.split('@')[0] || 'Admin',
+    email: user.email || '',
+    role: 'admin',
+    companyId: null,
+    phone: customData.phone || user.phoneNumber || '',
+    status: 'active',
+    accountStatus: 'select_package',
+    package: null,
+    maxCompanies: 0,
+    createdAt: Date.now(),
+  };
+
+  await update(ref(database, `users/${user.uid}`), newProfile);
+  return { uid: user.uid, ...newProfile };
+}
+
+/**
  * Register a new Admin / Business Owner
  */
 export async function registerAdmin({ name, email, password, phone, useGoogle = false }) {
-  let userCredential;
-
   if (useGoogle) {
-    userCredential = await signInWithPopup(auth, googleProvider);
-  } else {
-    userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const user = await loginWithGoogle();
+    if (!user) {
+      // Redirect initiated on mobile or popup fallback
+      return null;
+    }
+    await ensureAdminProfile(user, { name, phone });
+    return { uid: user.uid };
   }
 
+  const userCredential = await createUserWithEmailAndPassword(auth, email, password);
   const user = userCredential.user;
   const uid = user.uid;
 
-  // Update display name
-  await updateProfile(user, { displayName: name || user.displayName });
+  if (name) {
+    await updateProfile(user, { displayName: name });
+  }
 
   // Create user record with initial accountStatus 'select_package'
   const updates = {};
@@ -44,10 +87,10 @@ export async function registerAdmin({ name, email, password, phone, useGoogle = 
     name: name || user.displayName || '',
     email: user.email,
     role: 'admin',
-    companyId: null, // Will be set when they create a company
+    companyId: null,
     phone: phone || '',
     status: 'active',
-    accountStatus: 'select_package', // New admins must select a package first
+    accountStatus: 'select_package',
     package: null,
     maxCompanies: 0,
     createdAt: Date.now(),
@@ -583,11 +626,65 @@ export async function loginWithEmail(email, password) {
 }
 
 /**
- * Login with Google
+ * Login with Google (Adaptive: Popup on Desktop, Redirect on Mobile / Popup-block)
  */
-export async function loginWithGoogle() {
-  const userCredential = await signInWithPopup(auth, googleProvider);
-  return userCredential.user;
+export async function loginWithGoogle(forceRedirect = false) {
+  const shouldUseRedirect = forceRedirect || isMobileBrowser();
+
+  if (shouldUseRedirect) {
+    sessionStorage.setItem('lamba_auth_redirect_pending', 'true');
+    await signInWithRedirect(auth, googleProvider);
+    return null; // Browser is navigating away
+  }
+
+  try {
+    const userCredential = await signInWithPopup(auth, googleProvider);
+    return userCredential.user;
+  } catch (err) {
+    // If popup is blocked, cancelled, or unsupported on live mobile browser, gracefully fallback to redirect
+    if (
+      err.code === 'auth/popup-blocked' ||
+      err.code === 'auth/operation-not-supported-in-this-environment' ||
+      err.code === 'auth/cancelled-popup-request' ||
+      err.code === 'auth/internal-error'
+    ) {
+      console.warn('[AuthService] Popup failed, falling back to signInWithRedirect:', err.code);
+      sessionStorage.setItem('lamba_auth_redirect_pending', 'true');
+      await signInWithRedirect(auth, googleProvider);
+      return null;
+    }
+    throw err;
+  }
+}
+
+/**
+ * Handle and resolve Google Redirect sign-in result when returning from redirect
+ */
+export async function handleGoogleRedirectResult() {
+  try {
+    const userCredential = await getRedirectResult(auth);
+    if (!userCredential || !userCredential.user) {
+      return null;
+    }
+
+    const user = userCredential.user;
+    sessionStorage.removeItem('lamba_auth_redirect_pending');
+
+    let profile = await getUserProfile(user.uid);
+    let isNewUser = false;
+
+    if (!profile) {
+      // Create initial Admin profile for new Google user
+      profile = await ensureAdminProfile(user);
+      isNewUser = true;
+    }
+
+    return { user, profile, isNewUser };
+  } catch (err) {
+    sessionStorage.removeItem('lamba_auth_redirect_pending');
+    console.error('[AuthService] Error in handleGoogleRedirectResult:', err);
+    throw err;
+  }
 }
 
 /**

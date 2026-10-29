@@ -62,6 +62,7 @@ export function validateAdminCode(code) {
  * Translate Firebase auth error codes to user-friendly messages
  */
 export function getAuthErrorMessage(errorCode) {
+  const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'this domain';
   const messages = {
     'auth/email-already-in-use': 'An account already exists with this email.',
     'auth/invalid-email': 'Please enter a valid email address.',
@@ -71,9 +72,13 @@ export function getAuthErrorMessage(errorCode) {
     'auth/weak-password': 'Password must be at least 6 characters.',
     'auth/too-many-requests': 'Too many attempts. Please try again later.',
     'auth/network-request-failed': 'Network error. Check your connection.',
-    'auth/popup-closed-by-user': 'Sign-in popup was closed.',
+    'auth/popup-closed-by-user': 'Sign-in was cancelled.',
+    'auth/popup-blocked': 'Sign-in popup was blocked by your browser. Trying redirect...',
+    'auth/cancelled-popup-request': 'Only one sign-in request is allowed at a time.',
     'auth/invalid-credential': 'Invalid credentials. Please try again.',
-    'auth/operation-not-allowed': 'This sign-in method is not enabled.',
+    'auth/operation-not-allowed': 'Google sign-in is not enabled in Firebase Authentication Console.',
+    'auth/unauthorized-domain': `Domain '${currentHost}' is not authorized. Please add '${currentHost}' to Firebase Console -> Authentication -> Settings -> Authorized Domains.`,
+    'auth/account-exists-with-different-credential': 'An account already exists with this email using another login method.',
   };
-  return messages[errorCode] || 'An error occurred. Please try again.';
+  return messages[errorCode] || (errorCode ? `Authentication error (${errorCode})` : 'An error occurred. Please try again.');
 }

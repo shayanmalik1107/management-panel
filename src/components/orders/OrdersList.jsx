@@ -59,6 +59,7 @@ export default function OrdersList() {
   };
 
   const [customers, setCustomers] = useState([]);
+  const [products, setProducts] = useState([]);
 
   useEffect(() => {
     if (!companyId) return;
@@ -100,9 +101,21 @@ export default function OrdersList() {
       setCustomers(allCusts);
     });
 
+    const productsRef = ref(database, `companies/${companyId}/products`);
+    const unsubscribeProducts = onValue(productsRef, (snapshot) => {
+      const allProds = [];
+      if (snapshot.exists()) {
+        snapshot.forEach((child) => {
+          allProds.push({ id: child.key, ...child.val() });
+        });
+      }
+      setProducts(allProds);
+    });
+
     return () => {
       unsubscribeOrders();
       unsubscribeCusts();
+      unsubscribeProducts();
     };
   }, [companyId, isAdmin, currentUser?.uid]);
 
@@ -227,7 +240,25 @@ export default function OrdersList() {
         const returnedQty = Number(item.returnedQty || item.returnedQuantity) || 0;
         const orderedQty = qty;
         const salePrice = Number(item.salePrice || item.unitPrice || item.price) || 0;
-        const purchasePrice = Number(item.purchasePrice || item.costPrice || item.cost) || 0;
+        const productMatch = products.find(p => 
+          (item.productId && p.id === item.productId) || 
+          (item.sku && p.sku && String(p.sku).trim().toLowerCase() === String(item.sku).trim().toLowerCase()) ||
+          (item.productName && p.name && String(p.name).trim().toLowerCase() === String(item.productName).trim().toLowerCase())
+        );
+
+        const purchasePrice = Number(item.costPriceAtSale) > 0 
+          ? Number(item.costPriceAtSale) 
+          : (Number(item.purchasePrice) > 0 
+            ? Number(item.purchasePrice) 
+            : (Number(item.costPrice) > 0 
+              ? Number(item.costPrice) 
+              : (Number(item.cost) > 0 
+                ? Number(item.cost) 
+                : (Number(productMatch?.purchasePrice) > 0 
+                  ? Number(productMatch.purchasePrice) 
+                  : (Number(productMatch?.costPrice) > 0 
+                    ? Number(productMatch.costPrice) 
+                    : 0)))));
 
         const effectivePrice = salePrice * (1 - (discountPct / 100));
         const orderedValue = orderedQty * effectivePrice;
@@ -266,7 +297,7 @@ export default function OrdersList() {
       ...summary,
       orderNumbers: Array.from(summary.orderNumbersSet).sort()
     }));
-  }, [filteredOrders, selectedOrders]);
+  }, [filteredOrders, selectedOrders, products]);
 
   // Export Checklist PDF Handler
   const handleExportChecklistPDF = async () => {

@@ -886,7 +886,35 @@ export default function LambaVoiceAssistant() {
       const totalExpenses = currentExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
       const activeOrders = currentOrders.filter(o => o.status !== 'cancelled' && o.status !== 'returned');
       const totalSalesAll = activeOrders.reduce((sum, o) => sum + (Number(o.grandTotal) || 0), 0);
-      const netProfit = totalSalesAll - totalExpenses;
+
+      let totalCogs = 0;
+      activeOrders.forEach(order => {
+        if (order && order.items) {
+          const rawItems = Array.isArray(order.items) ? order.items : Object.values(order.items);
+          rawItems.forEach(item => {
+            if (!item) return;
+            const productMatch = currentProducts.find(p => 
+              (item.productId && p.id === item.productId) || 
+              (item.sku && p.sku && String(p.sku).trim().toLowerCase() === String(item.sku).trim().toLowerCase()) ||
+              (item.productName && p.name && String(p.name).trim().toLowerCase() === String(item.productName).trim().toLowerCase())
+            );
+            const unitCost = Number(item.costPriceAtSale) > 0 
+              ? Number(item.costPriceAtSale) 
+              : (Number(item.purchasePrice) > 0 
+                ? Number(item.purchasePrice) 
+                : (Number(item.costPrice) > 0 
+                  ? Number(item.costPrice) 
+                  : (Number(productMatch?.purchasePrice) > 0 
+                    ? Number(productMatch.purchasePrice) 
+                    : (Number(productMatch?.costPrice) > 0 
+                      ? Number(productMatch.costPrice) 
+                      : 0))));
+            const qty = Math.max(0, (Number(item.quantity) || 0) - (Number(item.returnedQty || item.returnedQuantity) || 0));
+            totalCogs += unitCost * qty;
+          });
+        }
+      });
+      const netProfit = totalSalesAll - totalCogs - totalExpenses;
 
       // Compute low stock and debtors from fresh data
       const freshLowStock = isAdmin
@@ -949,6 +977,7 @@ EXACT FINANCIAL LEDGER (MATCHES DASHBOARD 100%):
 - Supplier Payments Made: ${currency} ${supplierPaymentsMade.toLocaleString()}
 - Total Customer Credit Left (Owed by Customers to Store): ${currency} ${totalCustomerCreditLeft.toLocaleString()}
 - Total Store Sales: ${currency} ${totalSalesAll.toLocaleString()}
+- Total Cost of Products Sold (COGS): ${currency} ${totalCogs.toLocaleString()}
 - Total Overhead Expenses: ${currency} ${totalExpenses.toLocaleString()}
 - Net Profit: ${currency} ${netProfit.toLocaleString()}
 
@@ -1197,45 +1226,20 @@ STRICT MANDATORY RULES:
   return (
     <>
       {/* Floating AI Orb Button (Bottom-Right) */}
-      <div style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 9999 }}>
+      <div className="lamba-ai-trigger-wrap">
         {!isOpen && (
           <button
+            className="lamba-ai-trigger-btn"
             onClick={() => setIsOpen(true)}
-            style={{
-              background: 'linear-gradient(135deg, #7c3aed 0%, #2563eb 50%, #06b6d4 100%)',
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: 30,
-              padding: '12px 20px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              fontSize: 14,
-              fontWeight: 800,
-              cursor: 'pointer',
-              boxShadow: '0 8px 25px rgba(124, 58, 237, 0.45)',
-              transition: 'all 0.25s ease',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-3px) scale(1.03)';
-              e.currentTarget.style.boxShadow = '0 12px 30px rgba(124, 58, 237, 0.6)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0) scale(1)';
-              e.currentTarget.style.boxShadow = '0 8px 25px rgba(124, 58, 237, 0.45)';
-            }}
+            aria-label="Open LAMBA AI Voice Assistant"
+            title="Open LAMBA AI Assistant"
           >
-            <span style={{
-              width: 10,
-              height: 10,
-              borderRadius: '50%',
-              background: '#4ade80',
-              boxShadow: '0 0 10px #4ade80',
-              display: 'inline-block'
-            }} />
-            <Bot size={20} />
-            <span>Ask LAMBA AI</span>
-            <Mic size={16} style={{ opacity: 0.8 }} />
+            <span className="lamba-ai-status-dot" />
+            <div className="lamba-ai-logo-badge">
+              <img src="/lambalogo.png" alt="LAMBA AI" className="lamba-ai-trigger-logo" />
+            </div>
+            <span className="lamba-ai-trigger-text">Ask LAMBA AI</span>
+            <Mic size={16} className="lamba-ai-trigger-mic" />
           </button>
         )}
       </div>
@@ -1274,13 +1278,15 @@ STRICT MANDATORY RULES:
                 width: 38,
                 height: 38,
                 borderRadius: 12,
-                background: 'linear-gradient(135deg, #7c3aed 0%, #2563eb 100%)',
+                background: '#ffffff',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                boxShadow: '0 4px 12px rgba(124, 58, 237, 0.4)',
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
+                padding: 4,
+                flexShrink: 0,
               }}>
-                <Bot size={22} color="#ffffff" />
+                <img src="/lambalogo.png" alt="LAMBA AI" style={{ width: 26, height: 26, objectFit: 'contain' }} />
               </div>
               <div>
                 <div style={{ fontSize: 15, fontWeight: 800 }}>

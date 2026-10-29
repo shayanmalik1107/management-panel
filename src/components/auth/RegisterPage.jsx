@@ -1,8 +1,8 @@
 // Register Page — Admin & Employee Registration
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Building2, Users, Mail, Lock, Eye, EyeOff, User, Phone, KeyRound, Briefcase } from 'lucide-react';
-import { registerAdmin, registerEmployee } from '../../services/authService';
+import { registerAdmin, registerEmployee, handleGoogleRedirectResult } from '../../services/authService';
 import { getAuthErrorMessage, validateEmail, validatePassword, validateRequired, validateAdminCode } from '../../utils/validators';
 import { useToast } from '../../contexts/ToastContext';
 
@@ -77,14 +77,49 @@ export default function RegisterPage() {
     }
   };
 
+  // Listen for returning Google Redirect result on mobile / live
+  useEffect(() => {
+    let active = true;
+    const checkRedirect = async () => {
+      try {
+        const result = await handleGoogleRedirectResult();
+        if (!result || !active) return;
+
+        setLoading(true);
+        const { profile, isNewUser } = result;
+
+        if (profile?.status === 'disabled') {
+          toast.error('This account has been disabled. Contact support.');
+          setLoading(false);
+          return;
+        }
+
+        toast.success('Account verified with Google! Please choose your package.');
+        navigate('/select-package');
+      } catch (err) {
+        if (!active) return;
+        console.error('Google Redirect error on Register:', err);
+        toast.error(getAuthErrorMessage(err.code) || err.message);
+        setLoading(false);
+      }
+    };
+
+    checkRedirect();
+    return () => { active = false; };
+  }, [navigate, toast]);
+
   const handleAdminGoogleRegister = async () => {
     setLoading(true);
     try {
-      await registerAdmin({
+      const result = await registerAdmin({
         ...adminForm,
         useGoogle: true,
       });
-      // Auth context will redirect to dashboard
+      if (result) {
+        toast.success('Account created! Please select a package.');
+        navigate('/select-package');
+      }
+      // If null, redirect was initiated for mobile browser
     } catch (err) {
       toast.error(getAuthErrorMessage(err.code) || err.message);
       setLoading(false);

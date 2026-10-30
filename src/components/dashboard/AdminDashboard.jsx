@@ -20,9 +20,11 @@ import { setupCompany } from '../../services/authService';
 import { useToast } from '../../contexts/ToastContext';
 import WhatsAppButton from '../common/WhatsAppButton';
 import { getOutboxItems, getCachedCollection, cacheCollection } from '../../services/offlineStorage';
+import { useTheme } from '../../contexts/ThemeContext';
 
 export default function AdminDashboard() {
   const { companyId, companyInfo, currentUser, userProfile, isAdmin } = useAuth();
+  const { isDark } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const toast = useToast();
@@ -714,10 +716,10 @@ export default function AdminDashboard() {
                     <stop offset="95%" stopColor="#6366F1" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 13 }} />
+                <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#1f293d' : '#f0f0f0'} />
+                <XAxis dataKey="name" tick={{ fontSize: 11, fill: isDark ? '#94a3b8' : '#9CA3AF' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: isDark ? '#94a3b8' : '#9CA3AF' }} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={{ background: isDark ? '#161f30' : '#ffffff', color: isDark ? '#ffffff' : '#111827', borderRadius: 8, border: isDark ? '1px solid #2e384d' : '1px solid #e5e7eb', fontSize: 13 }} itemStyle={{ color: isDark ? '#ffffff' : '#111827' }} />
                 <Area type="monotone" dataKey="sales" stroke="#6366F1" strokeWidth={2} fill="url(#salesGrad)" />
               </AreaChart>
             </ResponsiveContainer>
@@ -735,10 +737,10 @@ export default function AdminDashboard() {
           {chartData.length > 0 ? (
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 13 }} />
+                <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#1f293d' : '#f0f0f0'} />
+                <XAxis dataKey="name" tick={{ fontSize: 11, fill: isDark ? '#94a3b8' : '#9CA3AF' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: isDark ? '#94a3b8' : '#9CA3AF' }} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={{ background: isDark ? '#161f30' : '#ffffff', color: isDark ? '#ffffff' : '#111827', borderRadius: 8, border: isDark ? '1px solid #2e384d' : '1px solid #e5e7eb', fontSize: 13 }} itemStyle={{ color: isDark ? '#ffffff' : '#111827' }} />
                 <Bar dataKey="orders" fill="#818CF8" radius={[4, 4, 0, 0]} maxBarSize={40} />
               </BarChart>
             </ResponsiveContainer>

@@ -25,9 +25,11 @@ import { formatCurrency, formatDate, formatDateTime } from '../../utils/formatte
 import { listenLedgerEntries, createLedgerEntry, updateLedgerEntry, deleteLedgerEntry } from '../../services/ledgerService';
 import { getSuppliers } from '../../services/supplierService';
 import FilterPanel from '../common/FilterPanel';
+import { useTheme } from '../../contexts/ThemeContext';
 
 export default function LedgerPage() {
   const { companyId, companyInfo, isAdmin, currentUser, userProfile } = useAuth();
+  const { isDark } = useTheme();
   const toast = useToast();
 
   const [ledgerEntries, setLedgerEntries] = useState([]);
@@ -351,12 +353,12 @@ export default function LedgerPage() {
         <div
           className="stat-card"
           style={{
-            borderColor: finalAmountDue > 0 ? 'var(--danger-300)' : 'var(--success-300)',
-            backgroundColor: finalAmountDue > 0 ? 'var(--danger-50)' : 'var(--success-50)'
+            borderColor: finalAmountDue > 0 ? (isDark ? 'rgba(239, 68, 68, 0.4)' : 'var(--danger-300)') : (isDark ? 'rgba(16, 185, 129, 0.4)' : 'var(--success-300)'),
+            backgroundColor: finalAmountDue > 0 ? (isDark ? 'rgba(239, 68, 68, 0.15)' : 'var(--danger-50)') : (isDark ? 'rgba(16, 185, 129, 0.15)' : 'var(--success-50)')
           }}
         >
           <div className="stat-card-header">
-            <span className="stat-card-label" style={{ fontWeight: 600, color: finalAmountDue > 0 ? 'var(--danger-800)' : 'var(--success-800)' }}>
+            <span className="stat-card-label" style={{ fontWeight: 600, color: finalAmountDue > 0 ? (isDark ? '#fca5a5' : 'var(--danger-800)') : (isDark ? '#86efac' : 'var(--success-800)') }}>
               Final Amount Still Due
             </span>
             <div className={`stat-card-icon ${finalAmountDue > 0 ? 'red' : 'green'}`}>
@@ -365,11 +367,11 @@ export default function LedgerPage() {
           </div>
           <div
             className="stat-card-value"
-            style={{ color: finalAmountDue > 0 ? 'var(--danger-700)' : 'var(--success-700)', fontWeight: 700 }}
+            style={{ color: finalAmountDue > 0 ? (isDark ? '#f87171' : 'var(--danger-700)') : (isDark ? '#4ade80' : 'var(--success-700)'), fontWeight: 700 }}
           >
             {formatCurrency(finalAmountDue > 0 ? finalAmountDue : 0, currency)}
           </div>
-          <div className="text-xs mt-1" style={{ color: finalAmountDue > 0 ? 'var(--danger-600)' : 'var(--success-600)' }}>
+          <div className="text-xs mt-1" style={{ color: finalAmountDue > 0 ? (isDark ? '#fca5a5' : 'var(--danger-600)') : (isDark ? '#86efac' : 'var(--success-600)') }}>
             {finalAmountDue > 0 ? '⚠ Outstanding purchase balance' : '✓ All purchases fully settled'}
           </div>
         </div>
@@ -458,56 +460,63 @@ export default function LedgerPage() {
             >
               {/* Excel Column Letters Header - Sticky Top */}
               <thead style={{ position: 'sticky', top: 0, zIndex: 30 }}>
-                <tr style={{ background: '#f3f4f6', color: '#6b7280', fontSize: '11px', textAlign: 'center' }}>
-                  <th style={{ border: '1px solid #e5e7eb', width: '50px', padding: '4px', position: 'sticky', top: 0, background: '#f3f4f6', zIndex: 30 }}>#</th>
-                  <th style={{ border: '1px solid #e5e7eb', width: '250px', padding: '4px', position: 'sticky', top: 0, background: '#f3f4f6', zIndex: 30 }}>A (DATE & TIME)</th>
-                  <th style={{ border: '1px solid #e5e7eb', width: '220px', padding: '4px', textAlign: 'right', position: 'sticky', top: 0, background: '#f3f4f6', zIndex: 30 }}>B (PURCHASE)</th>
-                  <th style={{ border: '1px solid #e5e7eb', width: '220px', padding: '4px', textAlign: 'right', position: 'sticky', top: 0, background: '#f3f4f6', zIndex: 30 }}>C (PAYMENT)</th>
-                  <th style={{ border: '1px solid #e5e7eb', padding: '4px', textAlign: 'left', position: 'sticky', top: 0, background: '#f3f4f6', zIndex: 30 }}>SUPPLIER / DETAILS</th>
-                  {isAdmin && <th style={{ border: '1px solid #e5e7eb', width: '90px', padding: '4px', textAlign: 'center', position: 'sticky', top: 0, background: '#f3f4f6', zIndex: 30 }}>ACTION</th>}
+                <tr style={{ background: isDark ? '#161f30' : '#f3f4f6', color: isDark ? '#94a3b8' : '#6b7280', fontSize: '11px', textAlign: 'center' }}>
+                  <th style={{ border: isDark ? '1px solid #1f293d' : '1px solid #e5e7eb', width: '50px', padding: '4px', position: 'sticky', top: 0, background: isDark ? '#161f30' : '#f3f4f6', zIndex: 30 }}>#</th>
+                  <th style={{ border: isDark ? '1px solid #1f293d' : '1px solid #e5e7eb', width: '250px', padding: '4px', position: 'sticky', top: 0, background: isDark ? '#161f30' : '#f3f4f6', zIndex: 30 }}>A (DATE & TIME)</th>
+                  <th style={{ border: isDark ? '1px solid #1f293d' : '1px solid #e5e7eb', width: '220px', padding: '4px', textAlign: 'right', position: 'sticky', top: 0, background: isDark ? '#161f30' : '#f3f4f6', zIndex: 30 }}>B (PURCHASE)</th>
+                  <th style={{ border: isDark ? '1px solid #1f293d' : '1px solid #e5e7eb', width: '220px', padding: '4px', textAlign: 'right', position: 'sticky', top: 0, background: isDark ? '#161f30' : '#f3f4f6', zIndex: 30 }}>C (PAYMENT)</th>
+                  <th style={{ border: isDark ? '1px solid #1f293d' : '1px solid #e5e7eb', padding: '4px', textAlign: 'left', position: 'sticky', top: 0, background: isDark ? '#161f30' : '#f3f4f6', zIndex: 30 }}>SUPPLIER / DETAILS</th>
+                  {isAdmin && <th style={{ border: isDark ? '1px solid #1f293d' : '1px solid #e5e7eb', width: '90px', padding: '4px', textAlign: 'center', position: 'sticky', top: 0, background: isDark ? '#161f30' : '#f3f4f6', zIndex: 30 }}>ACTION</th>}
                 </tr>
 
                 {/* Primary Column Names */}
-                <tr style={{ background: '#f9fafb', borderBottom: '2px solid #d1d5db' }}>
-                  <th style={{ border: '1px solid #e5e7eb', textAlign: 'center', position: 'sticky', top: '25px', background: '#f9fafb', zIndex: 30 }}>#</th>
-                  <th style={{ border: '1px solid #e5e7eb', fontSize: '13px', fontWeight: 700, color: '#111827', position: 'sticky', top: '25px', background: '#f9fafb', zIndex: 30 }}>
+                <tr style={{ background: isDark ? '#111827' : '#f9fafb', borderBottom: isDark ? '2px solid #1f293d' : '2px solid #d1d5db' }}>
+                  <th style={{ border: isDark ? '1px solid #1f293d' : '1px solid #e5e7eb', textAlign: 'center', position: 'sticky', top: '25px', background: isDark ? '#111827' : '#f9fafb', zIndex: 30 }}>#</th>
+                  <th style={{ border: isDark ? '1px solid #1f293d' : '1px solid #e5e7eb', fontSize: '13px', fontWeight: 700, color: isDark ? '#f8fafc' : '#111827', position: 'sticky', top: '25px', background: isDark ? '#111827' : '#f9fafb', zIndex: 30 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <Calendar size={14} style={{ color: '#4b5563' }} /> Date & Time
+                      <Calendar size={14} style={{ color: isDark ? '#94a3b8' : '#4b5563' }} /> Date & Time
                     </div>
                   </th>
-                  <th style={{ border: '1px solid #e5e7eb', fontSize: '13px', fontWeight: 700, color: '#2563eb', textAlign: 'right', position: 'sticky', top: '25px', background: '#f9fafb', zIndex: 30 }}>
+                  <th style={{ border: isDark ? '1px solid #1f293d' : '1px solid #e5e7eb', fontSize: '13px', fontWeight: 700, color: isDark ? '#60a5fa' : '#2563eb', textAlign: 'right', position: 'sticky', top: '25px', background: isDark ? '#111827' : '#f9fafb', zIndex: 30 }}>
                     Purchase ({currency})
                   </th>
-                  <th style={{ border: '1px solid #e5e7eb', fontSize: '13px', fontWeight: 700, color: '#059669', textAlign: 'right', position: 'sticky', top: '25px', background: '#f9fafb', zIndex: 30 }}>
+                  <th style={{ border: isDark ? '1px solid #1f293d' : '1px solid #e5e7eb', fontSize: '13px', fontWeight: 700, color: isDark ? '#34d399' : '#059669', textAlign: 'right', position: 'sticky', top: '25px', background: isDark ? '#111827' : '#f9fafb', zIndex: 30 }}>
                     Payment ({currency})
                   </th>
-                  <th style={{ border: '1px solid #e5e7eb', fontSize: '13px', fontWeight: 700, color: '#111827', position: 'sticky', top: '25px', background: '#f9fafb', zIndex: 30 }}>
+                  <th style={{ border: isDark ? '1px solid #1f293d' : '1px solid #e5e7eb', fontSize: '13px', fontWeight: 700, color: isDark ? '#f8fafc' : '#111827', position: 'sticky', top: '25px', background: isDark ? '#111827' : '#f9fafb', zIndex: 30 }}>
                     Supplier & Transaction Details
                   </th>
-                  {isAdmin && <th style={{ border: '1px solid #e5e7eb', textAlign: 'center', fontSize: '12px', position: 'sticky', top: '25px', background: '#f9fafb', zIndex: 30 }}>Edit/Del</th>}
+                  {isAdmin && <th style={{ border: isDark ? '1px solid #1f293d' : '1px solid #e5e7eb', textAlign: 'center', fontSize: '12px', position: 'sticky', top: '25px', background: isDark ? '#111827' : '#f9fafb', zIndex: 30 }}>Edit/Del</th>}
                 </tr>
               </thead>
 
               <tbody>
                 {filteredRows.length > 0 ? (
                   filteredRows.map((row, idx) => {
+                    const isEven = idx % 2 === 0;
+                    const rowBg = isDark 
+                      ? (isEven ? '#111827' : '#161f30')
+                      : (isEven ? '#ffffff' : '#f9fafb');
+                    const cellBorder = isDark ? '1px solid #1f293d' : '1px solid #e5e7eb';
+                    const indexBg = isDark ? '#1a2333' : '#f3f4f6';
+
                     return (
                       <tr
                         key={row.id + idx}
                         style={{
-                          background: idx % 2 === 0 ? '#ffffff' : '#f9fafb',
+                          background: rowBg,
                           transition: 'background-color 0.15s ease'
                         }}
                       >
                         {/* Excel Row Index */}
                         <td
                           style={{
-                            border: '1px solid #e5e7eb',
+                            border: cellBorder,
                             textAlign: 'center',
-                            color: '#9ca3af',
+                            color: isDark ? '#64748b' : '#9ca3af',
                             fontSize: '12px',
                             fontWeight: 500,
-                            background: '#f3f4f6'
+                            background: indexBg
                           }}
                         >
                           {idx + 1}
@@ -516,9 +525,9 @@ export default function LedgerPage() {
                         {/* COLUMN A: DATE & TIME */}
                         <td
                           style={{
-                            border: '1px solid #e5e7eb',
+                            border: cellBorder,
                             fontWeight: 600,
-                            color: '#1f2937',
+                            color: isDark ? '#e2e8f0' : '#1f2937',
                             fontSize: '13px',
                             whiteSpace: 'nowrap'
                           }}
@@ -529,13 +538,13 @@ export default function LedgerPage() {
                         {/* COLUMN B: PURCHASE */}
                         <td
                           style={{
-                            border: '1px solid #e5e7eb',
+                            border: cellBorder,
                             textAlign: 'right',
                             fontWeight: row.purchase > 0 ? 600 : 400,
-                            color: row.purchase > 0 ? '#2563eb' : '#9ca3af',
+                            color: row.purchase > 0 ? (isDark ? '#60a5fa' : '#2563eb') : '#64748b',
                             fontFamily: 'monospace',
                             fontSize: '13px',
-                            background: row.purchase > 0 ? '#eff6ff' : 'transparent'
+                            background: row.purchase > 0 ? (isDark ? 'rgba(37, 99, 235, 0.18)' : '#eff6ff') : 'transparent'
                           }}
                         >
                           {row.purchase > 0 ? formatCurrency(row.purchase, currency) : '—'}
@@ -544,27 +553,27 @@ export default function LedgerPage() {
                         {/* COLUMN C: PAYMENT */}
                         <td
                           style={{
-                            border: '1px solid #e5e7eb',
+                            border: cellBorder,
                             textAlign: 'right',
                             fontWeight: row.payment > 0 ? 600 : 400,
-                            color: row.payment > 0 ? '#059669' : '#9ca3af',
+                            color: row.payment > 0 ? (isDark ? '#34d399' : '#059669') : '#64748b',
                             fontFamily: 'monospace',
                             fontSize: '13px',
-                            background: row.payment > 0 ? '#f0fdf4' : 'transparent'
+                            background: row.payment > 0 ? (isDark ? 'rgba(16, 185, 129, 0.18)' : '#f0fdf4') : 'transparent'
                           }}
                         >
                           {row.payment > 0 ? formatCurrency(row.payment, currency) : '—'}
                         </td>
 
                         {/* SUPPLIER & DETAILS */}
-                        <td style={{ border: '1px solid #e5e7eb', fontSize: '13px', color: '#374151' }}>
+                        <td style={{ border: cellBorder, fontSize: '13px', color: isDark ? '#cbd5e1' : '#374151' }}>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                             {row.supplierName && (
-                              <span style={{ fontWeight: 600, color: '#111827' }}>
+                              <span style={{ fontWeight: 600, color: isDark ? '#ffffff' : '#111827' }}>
                                 Supplier: {row.supplierName}
                               </span>
                             )}
-                            <span className="text-xs text-muted">
+                            <span className="text-xs" style={{ color: isDark ? '#94a3b8' : '#6b7280' }}>
                               {row.description}
                             </span>
                           </div>
@@ -572,7 +581,7 @@ export default function LedgerPage() {
 
                         {/* ACTIONS FOR EDITABLE MANUAL ENTRIES */}
                         {isAdmin && (
-                          <td style={{ border: '1px solid #e5e7eb', textAlign: 'center' }}>
+                          <td style={{ border: cellBorder, textAlign: 'center' }}>
                             {row.isEditable ? (
                               <div style={{ display: 'flex', justifyContent: 'center', gap: '4px' }}>
                                 <button
@@ -616,19 +625,19 @@ export default function LedgerPage() {
               {/* STICKY EXCEL TOTALS & DUE BALANCE FOOTER */}
               <tfoot style={{ position: 'sticky', bottom: 0, zIndex: 40 }}>
                 {/* Row 1: Totals */}
-                <tr style={{ background: '#f3f4f6', fontWeight: 700 }}>
-                  <td style={{ border: '1px solid #d1d5db', textAlign: 'center', position: 'sticky', bottom: '46px', background: '#f3f4f6', zIndex: 40 }}>=</td>
-                  <td style={{ border: '1px solid #d1d5db', fontSize: '13px', color: '#111827', position: 'sticky', bottom: '46px', background: '#f3f4f6', zIndex: 40 }}>
+                <tr style={{ background: isDark ? '#161f30' : '#f3f4f6', fontWeight: 700 }}>
+                  <td style={{ border: isDark ? '1px solid #1f293d' : '1px solid #d1d5db', textAlign: 'center', position: 'sticky', bottom: '46px', background: isDark ? '#161f30' : '#f3f4f6', color: isDark ? '#94a3b8' : '#111827', zIndex: 40 }}>=</td>
+                  <td style={{ border: isDark ? '1px solid #1f293d' : '1px solid #d1d5db', fontSize: '13px', color: isDark ? '#ffffff' : '#111827', position: 'sticky', bottom: '46px', background: isDark ? '#161f30' : '#f3f4f6', zIndex: 40 }}>
                     TOTALS
                   </td>
                   <td
                     style={{
-                      border: '1px solid #d1d5db',
+                      border: isDark ? '1px solid #1f293d' : '1px solid #d1d5db',
                       textAlign: 'right',
                       fontSize: '14px',
-                      color: '#2563eb',
+                      color: isDark ? '#93c5fd' : '#2563eb',
                       fontFamily: 'monospace',
-                      background: '#dbeafe',
+                      background: isDark ? 'rgba(37, 99, 235, 0.2)' : '#dbeafe',
                       position: 'sticky',
                       bottom: '46px',
                       zIndex: 40
@@ -638,12 +647,12 @@ export default function LedgerPage() {
                   </td>
                   <td
                     style={{
-                      border: '1px solid #d1d5db',
+                      border: isDark ? '1px solid #1f293d' : '1px solid #d1d5db',
                       textAlign: 'right',
                       fontSize: '14px',
-                      color: '#059669',
+                      color: isDark ? '#6ee7b7' : '#059669',
                       fontFamily: 'monospace',
-                      background: '#dcfce7',
+                      background: isDark ? 'rgba(16, 185, 129, 0.2)' : '#dcfce7',
                       position: 'sticky',
                       bottom: '46px',
                       zIndex: 40
@@ -651,25 +660,25 @@ export default function LedgerPage() {
                   >
                     {formatCurrency(totalPayments, currency)}
                   </td>
-                  <td colSpan={isAdmin ? 2 : 1} style={{ border: '1px solid #d1d5db', fontSize: '12px', color: '#4b5563', position: 'sticky', bottom: '46px', background: '#f3f4f6', zIndex: 40 }}>
+                  <td colSpan={isAdmin ? 2 : 1} style={{ border: isDark ? '1px solid #1f293d' : '1px solid #d1d5db', fontSize: '12px', color: isDark ? '#94a3b8' : '#4b5563', position: 'sticky', bottom: '46px', background: isDark ? '#161f30' : '#f3f4f6', zIndex: 40 }}>
                     Sum of Purchases & Sum of Payments
                   </td>
                 </tr>
 
                 {/* Row 2: Final Purchase Amount Still Due (Purchases - Payments) */}
                 <tr style={{ fontWeight: 700 }}>
-                  <td style={{ border: '1px solid #d1d5db', textAlign: 'center', color: finalAmountDue > 0 ? '#dc2626' : '#16a34a', position: 'sticky', bottom: 0, background: finalAmountDue > 0 ? '#fef2f2' : '#f0fdf4', zIndex: 41 }}>
+                  <td style={{ border: isDark ? '1px solid #1f293d' : '1px solid #d1d5db', textAlign: 'center', color: finalAmountDue > 0 ? (isDark ? '#f87171' : '#dc2626') : (isDark ? '#4ade80' : '#16a34a'), position: 'sticky', bottom: 0, background: isDark ? (finalAmountDue > 0 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)') : (finalAmountDue > 0 ? '#fef2f2' : '#f0fdf4'), zIndex: 41 }}>
                     ∑
                   </td>
                   <td
                     style={{
-                      border: '1px solid #d1d5db',
+                      border: isDark ? '1px solid #1f293d' : '1px solid #d1d5db',
                       fontSize: '13px',
-                      color: finalAmountDue > 0 ? '#991b1b' : '#166534',
+                      color: finalAmountDue > 0 ? (isDark ? '#fca5a5' : '#991b1b') : (isDark ? '#86efac' : '#166534'),
                       textTransform: 'uppercase',
                       position: 'sticky',
                       bottom: 0,
-                      background: finalAmountDue > 0 ? '#fef2f2' : '#f0fdf4',
+                      background: isDark ? (finalAmountDue > 0 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)') : (finalAmountDue > 0 ? '#fef2f2' : '#f0fdf4'),
                       zIndex: 41
                     }}
                   >
@@ -678,14 +687,14 @@ export default function LedgerPage() {
                   <td
                     colSpan={2}
                     style={{
-                      border: '1px solid #d1d5db',
+                      border: isDark ? '1px solid #1f293d' : '1px solid #d1d5db',
                       textAlign: 'right',
                       fontSize: '16px',
                       fontWeight: 800,
-                      color: finalAmountDue > 0 ? '#dc2626' : '#16a34a',
+                      color: finalAmountDue > 0 ? (isDark ? '#f87171' : '#dc2626') : (isDark ? '#4ade80' : '#16a34a'),
                       fontFamily: 'monospace',
                       padding: '8px 12px',
-                      background: finalAmountDue > 0 ? '#fee2e2' : '#bbf7d0',
+                      background: isDark ? (finalAmountDue > 0 ? 'rgba(239, 68, 68, 0.25)' : 'rgba(16, 185, 129, 0.25)') : (finalAmountDue > 0 ? '#fee2e2' : '#bbf7d0'),
                       position: 'sticky',
                       bottom: 0,
                       zIndex: 41
@@ -693,19 +702,19 @@ export default function LedgerPage() {
                   >
                     {formatCurrency(finalAmountDue > 0 ? finalAmountDue : 0, currency)}
                   </td>
-                  <td colSpan={isAdmin ? 2 : 1} style={{ border: '1px solid #d1d5db', fontSize: '12px', color: '#374151', position: 'sticky', bottom: 0, background: finalAmountDue > 0 ? '#fef2f2' : '#f0fdf4', zIndex: 41 }}>
+                  <td colSpan={isAdmin ? 2 : 1} style={{ border: isDark ? '1px solid #1f293d' : '1px solid #d1d5db', fontSize: '12px', color: isDark ? '#94a3b8' : '#374151', position: 'sticky', bottom: 0, background: isDark ? (finalAmountDue > 0 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)') : (finalAmountDue > 0 ? '#fef2f2' : '#f0fdf4'), zIndex: 41 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       {finalAmountDue > 0 ? (
                         <>
-                          <AlertCircle size={14} style={{ color: '#dc2626' }} />
-                          <span style={{ color: '#991b1b', fontWeight: 600 }}>
+                          <AlertCircle size={14} style={{ color: isDark ? '#f87171' : '#dc2626' }} />
+                          <span style={{ color: isDark ? '#fca5a5' : '#991b1b', fontWeight: 600 }}>
                             Calculation: Total Purchases ({formatCurrency(totalPurchases, currency)}) - Total Payments ({formatCurrency(totalPayments, currency)})
                           </span>
                         </>
                       ) : (
                         <>
-                          <CheckCircle size={14} style={{ color: '#16a34a' }} />
-                          <span style={{ color: '#166534', fontWeight: 600 }}>
+                          <CheckCircle size={14} style={{ color: isDark ? '#4ade80' : '#16a34a' }} />
+                          <span style={{ color: isDark ? '#86efac' : '#166534', fontWeight: 600 }}>
                             All recorded purchases have been paid in full!
                           </span>
                         </>

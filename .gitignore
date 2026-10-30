@@ -39,3 +39,6 @@ android/app/build/
 android/build/
 android/.gradle/
 .gradle/
+ios/DerivedData/
+ios/App/Pods/
+ios/App/build/

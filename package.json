@@ -23,16 +23,18 @@
     "files": [
       "dist/**/*",
       "electron/**/*",
-      "public/**/*"
+      "!node_modules/**/*"
     ],
     "mac": {
       "category": "public.app-category.business",
+      "icon": "electron/icon.icns",
       "target": [
         "dmg",
         "zip"
       ]
     },
     "win": {
+      "icon": "electron/icon.png",
       "target": [
         "nsis",
         "portable"

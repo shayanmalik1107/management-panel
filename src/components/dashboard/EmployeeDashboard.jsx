@@ -8,6 +8,7 @@ import { formatCurrency, formatNumber, formatDate, getLocalDateString } from '..
 import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from '../../utils/constants';
 import { ShoppingCart, Plus, TrendingUp, Clock, Users, Store, CreditCard, Calendar, X } from 'lucide-react';
 import WhatsAppButton from '../common/WhatsAppButton';
+import { getOutboxItems, getCachedCollection } from '../../services/offlineStorage';
 
 export default function EmployeeDashboard() {
   const { companyId, companyInfo, userProfile, currentUser } = useAuth();
@@ -180,6 +181,34 @@ export default function EmployeeDashboard() {
     if (!companyId || !currentUser) return;
 
     setLoading(true);
+
+    const loadOfflineLocalData = async () => {
+      try {
+        const outbox = await getOutboxItems(companyId);
+        const cached = await getCachedCollection(companyId, 'orders');
+        const pending = outbox
+          .filter(i => i.actionType === 'create_order' && i.payload?.order)
+          .map(i => ({ ...i.payload.order, id: i.payload.orderId || i.payload.order.id, isPendingSync: true }));
+
+        const map = new Map();
+        cached.forEach(o => map.set(o.id || o.orderNumber, o));
+        pending.forEach(o => map.set(o.id || o.orderNumber, o));
+        const merged = Array.from(map.values());
+        if (merged.length > 0) {
+          latestOrdersRef.current = merged;
+          recalculate();
+        }
+
+        const cachedCusts = await getCachedCollection(companyId, 'customers');
+        if (cachedCusts.length > 0) {
+          latestCustomersRef.current = cachedCusts;
+          recalculate();
+        }
+      } catch (_) {}
+    };
+
+    loadOfflineLocalData();
+
     const unsubs = [];
 
     const ordersUnsub = onValue(ref(database, `companies/${companyId}/orders`), (snap) => {
@@ -187,10 +216,24 @@ export default function EmployeeDashboard() {
       if (snap.exists()) {
         snap.forEach(child => list.push({ id: child.key, ...child.val() }));
       }
-      latestOrdersRef.current = list;
-      recalculate();
+
+      getOutboxItems(companyId).then((outbox) => {
+        const pending = outbox
+          .filter(i => i.actionType === 'create_order' && i.payload?.order)
+          .map(i => ({ ...i.payload.order, id: i.payload.orderId || i.payload.order.id, isPendingSync: true }));
+
+        const map = new Map();
+        list.forEach(o => map.set(o.id || o.orderNumber, o));
+        pending.forEach(o => map.set(o.id || o.orderNumber, o));
+        latestOrdersRef.current = Array.from(map.values());
+        recalculate();
+      }).catch(() => {
+        latestOrdersRef.current = list;
+        recalculate();
+      });
     }, (err) => {
-      console.error('Employee dashboard orders error:', err);
+      console.warn('Employee dashboard offline orders (using cached):', err);
+      loadOfflineLocalData();
       setLoading(false);
     });
     unsubs.push(ordersUnsub);
@@ -418,7 +461,16 @@ export default function EmployeeDashboard() {
               <tbody>
                 {recentOrders.map((order) => (
                   <tr key={order.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/orders/${order.id}`)}>
-                    <td className="table-cell-mono">{order.orderNumber}</td>
+                    <td className="table-cell-mono">
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                        <span>{order.orderNumber}</span>
+                        {order.isPendingSync && (
+                          <span style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '4px', background: '#fef3c7', color: '#b45309', fontWeight: 700 }}>
+                            ⏳ Offline
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className="text-muted text-sm">{formatDate(order.createdAt)}</td>
                     <td className="table-cell-primary">{order.customerName || '—'}</td>
                     <td>{formatCurrency(order.grandTotal, currency)}</td>

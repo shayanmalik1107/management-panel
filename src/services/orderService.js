@@ -3,60 +3,202 @@ import { ref, get, update, runTransaction } from 'firebase/database';
 import { database } from '../firebase';
 import { generateId } from '../utils/codeGenerator';
 import { generateSequentialNumber } from '../utils/formatters';
+import { saveToOutbox, addToCachedCollection, cacheCollection, getCachedCollection, getOutboxItems } from './offlineStorage';
 
 /**
- * Create a new order with stock validation and atomic updates
+ * Create a new order with stock validation and atomic updates (with seamless offline fallback)
  */
 export async function createOrder(companyId, orderData, userId, userName) {
-  // Get next order number
-  const counterRef = ref(database, `companies/${companyId}/counters/orderCounter`);
-  const counterSnap = await get(counterRef);
-  const currentCounter = (counterSnap.exists() ? counterSnap.val() : 0) + 1;
+  // If browser is offline, directly save locally to IndexedDB outbox
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return createOrderOffline(companyId, orderData, userId, userName);
+  }
 
-  // Get order prefix from settings
-  const settingsSnap = await get(ref(database, `companies/${companyId}/settings`));
-  const settings = settingsSnap.exists() ? settingsSnap.val() : {};
-  const prefix = settings.orderPrefix || 'ORD';
-  const allowNegativeStock = settings.allowNegativeStock || false;
+  try {
+    // Get next order number
+    const counterRef = ref(database, `companies/${companyId}/counters/orderCounter`);
+    const counterSnap = await get(counterRef);
+    const currentCounter = (counterSnap.exists() ? counterSnap.val() : 0) + 1;
 
-  const orderNumber = generateSequentialNumber(prefix, currentCounter);
-  const orderId = generateId('ord');
+    // Get order prefix from settings
+    const settingsSnap = await get(ref(database, `companies/${companyId}/settings`));
+    const settings = settingsSnap.exists() ? settingsSnap.val() : {};
+    const prefix = settings.orderPrefix || 'ORD';
+    const allowNegativeStock = settings.allowNegativeStock || false;
 
-  // Validate stock if needed
-  if (!allowNegativeStock && orderData.items && orderData.status !== 'draft') {
-    for (const item of orderData.items) {
-      const prodSnap = await get(ref(database, `companies/${companyId}/products/${item.productId}`));
-      if (prodSnap.exists()) {
-        const product = prodSnap.val();
-        if (product.currentStock < item.quantity) {
-          throw new Error(`Only ${product.currentStock} units of "${item.productName}" are currently available.`);
+    const orderNumber = generateSequentialNumber(prefix, currentCounter);
+    const orderId = generateId('ord');
+
+    // Validate stock if needed
+    if (!allowNegativeStock && orderData.items && orderData.status !== 'draft') {
+      for (const item of orderData.items) {
+        const prodSnap = await get(ref(database, `companies/${companyId}/products/${item.productId}`));
+        if (prodSnap.exists()) {
+          const product = prodSnap.val();
+          if (product.currentStock < item.quantity) {
+            throw new Error(`Only ${product.currentStock} units of "${item.productName}" are currently available.`);
+          }
         }
       }
     }
+
+    const isCash = orderData.paymentType === 'cash';
+    const grandTotal = Number(orderData.grandTotal) || 0;
+    const amountPaid = isCash ? grandTotal : (Number(orderData.amountPaid) || 0);
+
+    const order = {
+      ...orderData,
+      orderNumber,
+      companyId,
+      employeeId: userId,
+      createdBy: userId,
+      createdByName: userName,
+      paymentType: orderData.paymentType || (amountPaid >= grandTotal ? 'cash' : 'credit'),
+      amountPaid,
+      createdAt: orderData.createdAt || Date.now(),
+      updatedAt: Date.now(),
+    };
+
+    // Calculate payment status
+    order.paymentStatus = isCash ? 'paid' : calculatePaymentStatus(order.grandTotal, order.amountPaid);
+
+    // Convert items array to object for Firebase
+    const itemsObj = {};
+    if (orderData.items) {
+      orderData.items.forEach((item, index) => {
+        itemsObj[`item_${index}`] = {
+          productId: item.productId,
+          productName: item.productName,
+          sku: item.sku || '',
+          quantity: Number(item.quantity),
+          salePrice: Number(item.salePrice),
+          costPriceAtSale: Number(item.costPriceAtSale) || 0,
+          discount: Number(item.discount) || 0,
+          lineTotal: Number(item.lineTotal),
+        };
+      });
+    }
+    order.items = itemsObj;
+
+    const updates = {};
+    updates[`companies/${companyId}/orders/${orderId}`] = order;
+    updates[`companies/${companyId}/counters/orderCounter`] = currentCounter;
+
+    // If order is not draft, update stock and customer balance
+    if (order.status !== 'draft') {
+      // Update product stock
+      for (const item of orderData.items || []) {
+        const prodRef = ref(database, `companies/${companyId}/products/${item.productId}/currentStock`);
+        const stockSnap = await get(prodRef);
+        const currentStock = stockSnap.exists() ? stockSnap.val() : 0;
+        updates[`companies/${companyId}/products/${item.productId}/currentStock`] = currentStock - Number(item.quantity);
+
+        // Stock movement
+        const movId = generateId('mov');
+        updates[`companies/${companyId}/stockMovements/${movId}`] = {
+          type: 'sale',
+          productId: item.productId,
+          productName: item.productName,
+          quantity: -Number(item.quantity),
+          referenceId: orderId,
+          referenceType: 'order',
+          referenceNumber: orderNumber,
+          createdBy: userId,
+          createdAt: Date.now(),
+        };
+      }
+
+      // Update customer balance
+      if (orderData.customerId) {
+        const custBalRef = ref(database, `companies/${companyId}/customers/${orderData.customerId}/currentBalance`);
+        const balSnap = await get(custBalRef);
+        const currentBal = balSnap.exists() ? balSnap.val() : 0;
+        const orderOutstanding = (order.grandTotal || 0) - (order.amountPaid || 0);
+        updates[`companies/${companyId}/customers/${orderData.customerId}/currentBalance`] = currentBal + orderOutstanding;
+
+        // Update customer stats
+        const totalOrdersRef = ref(database, `companies/${companyId}/customers/${orderData.customerId}/totalOrders`);
+        const totalSalesRef = ref(database, `companies/${companyId}/customers/${orderData.customerId}/totalSales`);
+        const toSnap = await get(totalOrdersRef);
+        const tsSnap = await get(totalSalesRef);
+        updates[`companies/${companyId}/customers/${orderData.customerId}/totalOrders`] = (toSnap.exists() ? toSnap.val() : 0) + 1;
+        updates[`companies/${companyId}/customers/${orderData.customerId}/totalSales`] = (tsSnap.exists() ? tsSnap.val() : 0) + (order.grandTotal || 0);
+        updates[`companies/${companyId}/customers/${orderData.customerId}/lastOrderDate`] = Date.now();
+      }
+    }
+
+    // Activity & notification
+    const actId = generateId('act');
+    updates[`companies/${companyId}/activities/${actId}`] = {
+      userId, userName,
+      action: `${userName} created Order ${orderNumber}`,
+      entityType: 'order', entityId: orderId,
+      timestamp: Date.now(),
+    };
+
+    const notifId = generateId('notif');
+    updates[`companies/${companyId}/notifications/${notifId}`] = {
+      type: 'order_created',
+      message: `New order ${orderNumber} created by ${userName}`,
+      read: false,
+      userId,
+      userName,
+      entityType: 'order', entityId: orderId,
+      timestamp: Date.now(),
+    };
+
+    // Onboarding
+    updates[`companies/${companyId}/onboarding/firstOrder`] = true;
+
+    await update(ref(database), sanitizeFirebaseData(updates));
+    
+    // Also save in local offline cache for immediate offline viewing later
+    await addToCachedCollection(companyId, 'orders', { id: orderId, ...order });
+
+    return { orderId, orderNumber, isOffline: false };
+  } catch (err) {
+    // If it's a network/connectivity error, gracefully save locally
+    if (
+      !navigator.onLine || 
+      err.message?.includes('network') || 
+      err.message?.includes('offline') || 
+      err.message?.includes('Failed to fetch') ||
+      err.code === 'NETWORK_ERROR' ||
+      err.code === 'UNAVAILABLE'
+    ) {
+      console.warn('[Order Service] Network write failed, saving to offline outbox:', err);
+      return createOrderOffline(companyId, orderData, userId, userName);
+    }
+    throw err;
+  }
+}
+
+/**
+ * Save order locally in IndexedDB Outbox and update local cache for offline operation
+ */
+export async function createOrderOffline(companyId, orderData, userId, userName) {
+  const orderId = generateId('ord');
+  
+  // Local sequence generator
+  let counterKey = `offline_order_counter_${companyId}`;
+  let offlineCounter = 100;
+  try {
+    const saved = localStorage.getItem(counterKey);
+    if (saved) offlineCounter = parseInt(saved, 10);
+    offlineCounter += 1;
+    localStorage.setItem(counterKey, String(offlineCounter));
+  } catch (_) {
+    offlineCounter = Math.floor(1000 + Math.random() * 9000);
   }
 
+  const orderNumber = `ORD-OFF-${offlineCounter}`;
   const isCash = orderData.paymentType === 'cash';
   const grandTotal = Number(orderData.grandTotal) || 0;
   const amountPaid = isCash ? grandTotal : (Number(orderData.amountPaid) || 0);
 
-  const order = {
-    ...orderData,
-    orderNumber,
-    companyId,
-    employeeId: userId,
-    createdBy: userId,
-    createdByName: userName,
-    paymentType: orderData.paymentType || (amountPaid >= grandTotal ? 'cash' : 'credit'),
-    amountPaid,
-    createdAt: orderData.createdAt || Date.now(),
-    updatedAt: Date.now(),
-  };
-
-  // Calculate payment status
-  order.paymentStatus = isCash ? 'paid' : calculatePaymentStatus(order.grandTotal, order.amountPaid);
-
-  // Convert items array to object for Firebase
   const itemsObj = {};
+  const stockUpdates = {};
+
   if (orderData.items) {
     orderData.items.forEach((item, index) => {
       itemsObj[`item_${index}`] = {
@@ -69,82 +211,100 @@ export async function createOrder(companyId, orderData, userId, userName) {
         discount: Number(item.discount) || 0,
         lineTotal: Number(item.lineTotal),
       };
+
+      const movId = generateId('mov');
+      stockUpdates[item.productId] = {
+        quantity: Number(item.quantity),
+        movement: {
+          id: movId,
+          type: 'sale',
+          productId: item.productId,
+          productName: item.productName,
+          quantity: -Number(item.quantity),
+          referenceId: orderId,
+          referenceType: 'order',
+          referenceNumber: orderNumber,
+          createdBy: userId,
+          createdAt: Date.now(),
+        }
+      };
     });
   }
-  order.items = itemsObj;
 
-  const updates = {};
-  updates[`companies/${companyId}/orders/${orderId}`] = order;
-  updates[`companies/${companyId}/counters/orderCounter`] = currentCounter;
+  const order = {
+    ...orderData,
+    id: orderId,
+    orderNumber,
+    companyId,
+    employeeId: userId,
+    createdBy: userId,
+    createdByName: userName,
+    paymentType: orderData.paymentType || (amountPaid >= grandTotal ? 'cash' : 'credit'),
+    amountPaid,
+    paymentStatus: isCash ? 'paid' : calculatePaymentStatus(grandTotal, amountPaid),
+    items: itemsObj,
+    createdAt: orderData.createdAt || Date.now(),
+    updatedAt: Date.now(),
+    isPendingSync: true, // Marked pending until online sync
+  };
 
-  // If order is not draft, update stock and customer balance
-  if (order.status !== 'draft') {
-    // Update product stock
-    for (const item of orderData.items || []) {
-      const prodRef = ref(database, `companies/${companyId}/products/${item.productId}/currentStock`);
-      const stockSnap = await get(prodRef);
-      const currentStock = stockSnap.exists() ? stockSnap.val() : 0;
-      updates[`companies/${companyId}/products/${item.productId}/currentStock`] = currentStock - Number(item.quantity);
-
-      // Stock movement
-      const movId = generateId('mov');
-      updates[`companies/${companyId}/stockMovements/${movId}`] = {
-        type: 'sale',
-        productId: item.productId,
-        productName: item.productName,
-        quantity: -Number(item.quantity),
-        referenceId: orderId,
-        referenceType: 'order',
-        referenceNumber: orderNumber,
-        createdBy: userId,
-        createdAt: Date.now(),
-      };
-    }
-
-    // Update customer balance
-    if (orderData.customerId) {
-      const custBalRef = ref(database, `companies/${companyId}/customers/${orderData.customerId}/currentBalance`);
-      const balSnap = await get(custBalRef);
-      const currentBal = balSnap.exists() ? balSnap.val() : 0;
-      const orderOutstanding = (order.grandTotal || 0) - (order.amountPaid || 0);
-      updates[`companies/${companyId}/customers/${orderData.customerId}/currentBalance`] = currentBal + orderOutstanding;
-
-      // Update customer stats
-      const totalOrdersRef = ref(database, `companies/${companyId}/customers/${orderData.customerId}/totalOrders`);
-      const totalSalesRef = ref(database, `companies/${companyId}/customers/${orderData.customerId}/totalSales`);
-      const toSnap = await get(totalOrdersRef);
-      const tsSnap = await get(totalSalesRef);
-      updates[`companies/${companyId}/customers/${orderData.customerId}/totalOrders`] = (toSnap.exists() ? toSnap.val() : 0) + 1;
-      updates[`companies/${companyId}/customers/${orderData.customerId}/totalSales`] = (tsSnap.exists() ? tsSnap.val() : 0) + (order.grandTotal || 0);
-      updates[`companies/${companyId}/customers/${orderData.customerId}/lastOrderDate`] = Date.now();
-    }
+  let customerUpdates = null;
+  if (orderData.customerId) {
+    const orderOutstanding = (order.grandTotal || 0) - (order.amountPaid || 0);
+    customerUpdates = {
+      customerId: orderData.customerId,
+      balanceChange: orderOutstanding,
+      totalOrdersInc: 1,
+      totalSalesInc: order.grandTotal || 0,
+    };
   }
 
-  // Activity & notification
   const actId = generateId('act');
-  updates[`companies/${companyId}/activities/${actId}`] = {
-    userId, userName,
-    action: `${userName} created Order ${orderNumber}`,
-    entityType: 'order', entityId: orderId,
+  const activity = {
+    id: actId,
+    userId,
+    userName,
+    action: `${userName} created Order ${orderNumber} (Offline)`,
+    entityType: 'order',
+    entityId: orderId,
     timestamp: Date.now(),
   };
 
   const notifId = generateId('notif');
-  updates[`companies/${companyId}/notifications/${notifId}`] = {
+  const notification = {
+    id: notifId,
     type: 'order_created',
     message: `New order ${orderNumber} created by ${userName}`,
     read: false,
     userId,
     userName,
-    entityType: 'order', entityId: orderId,
+    entityType: 'order',
+    entityId: orderId,
     timestamp: Date.now(),
   };
 
-  // Onboarding
-  updates[`companies/${companyId}/onboarding/firstOrder`] = true;
+  // 1. Enqueue to IndexedDB Outbox
+  await saveToOutbox({
+    companyId,
+    actionType: 'create_order',
+    payload: {
+      orderId,
+      orderNumber,
+      order,
+      stockUpdates,
+      customerUpdates,
+      activity,
+      notification
+    },
+    userId,
+    userName,
+    description: `Order ${orderNumber} (${order.customerName || 'Shop'})`
+  });
 
-  await update(ref(database), sanitizeFirebaseData(updates));
-  return { orderId, orderNumber };
+  // 2. Add to local offline cache so current user immediately sees it in their orders list
+  await addToCachedCollection(companyId, 'orders', order);
+
+  return { orderId, orderNumber, isOffline: true };
 }
 
 /**
@@ -425,24 +585,89 @@ export async function updateOrder(companyId, orderId, newOrderData, userId, user
 }
 
 /**
- * Get all orders for a company
+ * Get all orders for a company (with offline cache support and local outbox merge)
  */
 export async function getOrders(companyId) {
-  const snap = await get(ref(database, `companies/${companyId}/orders`));
-  if (!snap.exists()) return [];
-  const orders = [];
-  snap.forEach(child => {
-    orders.push({ id: child.key, ...child.val() });
-  });
-  return orders.sort((a, b) => b.createdAt - a.createdAt);
+  // If offline, return cached orders merged with pending outbox items
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    const cached = await getCachedCollection(companyId, 'orders');
+    return cached.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  }
+
+  try {
+    const snap = await get(ref(database, `companies/${companyId}/orders`));
+    const orders = [];
+    if (snap.exists()) {
+      snap.forEach(child => {
+        orders.push({ id: child.key, ...child.val() });
+      });
+    }
+
+    // Merge any pending outbox orders that haven't synced yet
+    const pendingOutbox = await getOutboxItems(companyId);
+    const pendingOrders = pendingOutbox
+      .filter(item => item.actionType === 'create_order' && item.payload?.order)
+      .map(item => ({
+        ...item.payload.order,
+        id: item.payload.orderId || item.payload.order.id,
+        isPendingSync: true,
+      }));
+
+    // Deduplicate
+    const orderMap = new Map();
+    orders.forEach(o => orderMap.set(o.id || o.orderNumber, o));
+    pendingOrders.forEach(o => orderMap.set(o.id || o.orderNumber, o));
+
+    const merged = Array.from(orderMap.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+    // Update local cache for future offline browsing
+    await cacheCollection(companyId, 'orders', merged);
+
+    return merged;
+  } catch (err) {
+    console.warn('[Order Service] Failed to fetch orders from server, loading from cache:', err);
+    const cached = await getCachedCollection(companyId, 'orders');
+    return cached.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  }
 }
 
 /**
- * Get single order
+ * Get single order (with offline cache fallback)
  */
 export async function getOrder(companyId, orderId) {
-  const snap = await get(ref(database, `companies/${companyId}/orders/${orderId}`));
-  return snap.exists() ? { id: orderId, ...snap.val() } : null;
+  // If offline, check local cache and outbox
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return getOrderOffline(companyId, orderId);
+  }
+
+  try {
+    const snap = await get(ref(database, `companies/${companyId}/orders/${orderId}`));
+    if (snap.exists()) {
+      return { id: orderId, ...snap.val() };
+    }
+    // If not found in server, maybe it's a pending offline order
+    return getOrderOffline(companyId, orderId);
+  } catch (err) {
+    console.warn('[Order Service] Failed to get order from server, checking local cache:', err);
+    return getOrderOffline(companyId, orderId);
+  }
+}
+
+async function getOrderOffline(companyId, orderId) {
+  // 1. Check outbox pending items
+  const outboxItems = await getOutboxItems(companyId);
+  const foundOutbox = outboxItems.find(
+    i => i.actionType === 'create_order' && 
+         (i.payload?.orderId === orderId || i.payload?.order?.id === orderId || i.payload?.orderNumber === orderId)
+  );
+  if (foundOutbox && foundOutbox.payload?.order) {
+    return { ...foundOutbox.payload.order, id: orderId, isPendingSync: true };
+  }
+
+  // 2. Check local collection cache
+  const cachedOrders = await getCachedCollection(companyId, 'orders');
+  const found = cachedOrders.find(o => o.id === orderId || o.orderNumber === orderId);
+  return found || null;
 }
 
 /**

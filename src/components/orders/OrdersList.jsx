@@ -11,6 +11,7 @@ import { exportHtmlToPDF, generateSummaryHTML, exportOrderInvoiceToPDF, exportMu
 import OrderReturnModal from './OrderReturnModal';
 import FilterPanel from '../common/FilterPanel';
 import FlatList from '../common/FlatList';
+import { getOutboxItems, getCachedCollection, cacheCollection } from '../../services/offlineStorage';
 
 export default function OrdersList() {
   const { companyId, companyInfo, isAdmin, currentUser, userProfile, hasPermission } = useAuth();
@@ -65,6 +66,34 @@ export default function OrdersList() {
     if (!companyId) return;
 
     setLoading(true);
+
+    const loadCachedAndOutbox = async () => {
+      try {
+        const outbox = await getOutboxItems(companyId);
+        const cached = await getCachedCollection(companyId, 'orders');
+        const pending = outbox
+          .filter(i => i.actionType === 'create_order' && i.payload?.order)
+          .map(i => ({ ...i.payload.order, id: i.payload.orderId || i.payload.order.id, isPendingSync: true }));
+
+        const map = new Map();
+        cached.forEach(o => map.set(o.id || o.orderNumber, o));
+        pending.forEach(o => map.set(o.id || o.orderNumber, o));
+        const list = Array.from(map.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+        if (list.length > 0) {
+          if (!isAdmin) {
+            setOrders(list.filter(o => o.employeeId === currentUser?.uid || o.createdBy === currentUser?.uid));
+          } else {
+            setOrders(list);
+          }
+          setLoading(false);
+        }
+      } catch (_) {}
+    };
+
+    // Load local data immediately for fast/offline render
+    loadCachedAndOutbox();
+
     const ordersRef = ref(database, `companies/${companyId}/orders`);
     const custsRef = ref(database, `companies/${companyId}/customers`);
 
@@ -75,19 +104,41 @@ export default function OrdersList() {
           allOrders.push({ id: child.key, ...child.val() });
         });
       }
-      // Sort by createdAt descending
       allOrders.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
-      if (!isAdmin) {
-        setOrders(allOrders.filter(
-          o => o.employeeId === currentUser?.uid || o.createdBy === currentUser?.uid
-        ));
-      } else {
-        setOrders(allOrders);
-      }
-      setLoading(false);
+      getOutboxItems(companyId).then((outbox) => {
+        const pending = outbox
+          .filter(i => i.actionType === 'create_order' && i.payload?.order)
+          .map(i => ({ ...i.payload.order, id: i.payload.orderId || i.payload.order.id, isPendingSync: true }));
+
+        const map = new Map();
+        allOrders.forEach(o => map.set(o.id || o.orderNumber, o));
+        pending.forEach(o => map.set(o.id || o.orderNumber, o));
+        const merged = Array.from(map.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+        cacheCollection(companyId, 'orders', merged);
+
+        if (!isAdmin) {
+          setOrders(merged.filter(
+            o => o.employeeId === currentUser?.uid || o.createdBy === currentUser?.uid
+          ));
+        } else {
+          setOrders(merged);
+        }
+        setLoading(false);
+      }).catch(() => {
+        if (!isAdmin) {
+          setOrders(allOrders.filter(
+            o => o.employeeId === currentUser?.uid || o.createdBy === currentUser?.uid
+          ));
+        } else {
+          setOrders(allOrders);
+        }
+        setLoading(false);
+      });
     }, (err) => {
-      console.error('Orders listener error:', err);
+      console.warn('Orders listener network error, displaying local offline cache:', err);
+      loadCachedAndOutbox();
       setLoading(false);
     });
 
@@ -561,7 +612,16 @@ export default function OrdersList() {
                         )}
                       </button>
                     </td>
-                    <td className="table-cell-mono" onClick={() => navigate(`/orders/${order.id}`)}>{order.orderNumber}</td>
+                    <td className="table-cell-mono" onClick={() => navigate(`/orders/${order.id}`)}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                        <span>{order.orderNumber}</span>
+                        {order.isPendingSync && (
+                          <span style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '4px', background: '#fef3c7', color: '#b45309', fontWeight: 700 }}>
+                            ⏳ Offline
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className="text-muted text-sm" onClick={() => navigate(`/orders/${order.id}`)}>{formatDate(order.createdAt)}</td>
                     <td className="table-cell-primary" onClick={() => navigate(`/orders/${order.id}`)}>{order.customerName || '—'}</td>
                     <td onClick={() => navigate(`/orders/${order.id}`)}>

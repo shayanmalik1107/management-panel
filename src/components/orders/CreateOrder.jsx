@@ -239,14 +239,17 @@ export default function CreateOrder() {
         );
         toast.success(`Order ${existingOrderNumber} updated successfully`);
         navigate(`/orders/${id}`);
-      } else {
         const result = await createOrder(
           companyId, 
           orderData, 
           userId, 
           userName
         );
-        toast.success(`Order ${result.orderNumber} created successfully`);
+        if (result.isOffline) {
+          toast.success(`Order ${result.orderNumber} saved offline! Will auto-sync to server when connected.`);
+        } else {
+          toast.success(`Order ${result.orderNumber} created successfully`);
+        }
         navigate(`/orders/${result.orderId}`);
       }
     } catch (err) {

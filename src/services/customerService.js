@@ -1,7 +1,8 @@
-// Customer Service — CRUD for customers/shops
+// Customer Service — CRUD for customers/shops with offline support
 import { ref, get, update } from 'firebase/database';
 import { database } from '../firebase';
 import { generateId } from '../utils/codeGenerator';
+import { saveToOutbox, addToCachedCollection, cacheCollection, getCachedCollection, getOutboxItems } from './offlineStorage';
 
 export async function createCustomer(companyId, customerData, userId, userName) {
   const customerId = generateId('cust');
@@ -17,20 +18,64 @@ export async function createCustomer(companyId, customerData, userId, userName) 
     updatedAt: Date.now(),
   };
 
-  const updates = {};
-  updates[`companies/${companyId}/customers/${customerId}`] = customer;
+  // If offline, save locally
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return createCustomerOffline(companyId, customerId, customer, userId, userName);
+  }
 
+  try {
+    const updates = {};
+    updates[`companies/${companyId}/customers/${customerId}`] = customer;
+
+    const actId = generateId('act');
+    updates[`companies/${companyId}/activities/${actId}`] = {
+      userId, userName,
+      action: `${userName} added customer "${customerData.shopName}"`,
+      entityType: 'customer', entityId: customerId,
+      timestamp: Date.now(),
+    };
+
+    updates[`companies/${companyId}/onboarding/firstCustomer`] = true;
+
+    await update(ref(database), updates);
+    await addToCachedCollection(companyId, 'customers', { id: customerId, ...customer });
+    return customerId;
+  } catch (err) {
+    if (!navigator.onLine || err.message?.includes('network') || err.message?.includes('Failed to fetch')) {
+      console.warn('[Customer Service] Network write failed, saving to offline outbox:', err);
+      return createCustomerOffline(companyId, customerId, customer, userId, userName);
+    }
+    throw err;
+  }
+}
+
+async function createCustomerOffline(companyId, customerId, customer, userId, userName) {
+  const localCustomer = { ...customer, id: customerId, isPendingSync: true };
   const actId = generateId('act');
-  updates[`companies/${companyId}/activities/${actId}`] = {
-    userId, userName,
-    action: `${userName} added customer "${customerData.shopName}"`,
-    entityType: 'customer', entityId: customerId,
+  const activity = {
+    id: actId,
+    userId,
+    userName,
+    action: `${userName} added customer "${customer.shopName}" (Offline)`,
+    entityType: 'customer',
+    entityId: customerId,
     timestamp: Date.now(),
   };
 
-  updates[`companies/${companyId}/onboarding/firstCustomer`] = true;
+  await saveToOutbox({
+    companyId,
+    actionType: 'create_customer',
+    payload: {
+      customerId,
+      customer: localCustomer,
+      activity
+    },
+    userId,
+    userName,
+    description: `Shop "${customer.shopName}"`
+  });
 
-  await update(ref(database), updates);
+  await addToCachedCollection(companyId, 'customers', localCustomer);
   return customerId;
 }
 
@@ -62,18 +107,72 @@ export async function updateCustomer(companyId, customerId, customerData, userId
 }
 
 export async function getCustomers(companyId) {
-  const snap = await get(ref(database, `companies/${companyId}/customers`));
-  if (!snap.exists()) return [];
-  const customers = [];
-  snap.forEach(child => {
-    customers.push({ id: child.key, ...child.val() });
-  });
-  return customers;
+  // If offline, return cached customers merged with pending outbox customers
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    const cached = await getCachedCollection(companyId, 'customers');
+    return cached;
+  }
+
+  try {
+    const snap = await get(ref(database, `companies/${companyId}/customers`));
+    const customers = [];
+    if (snap.exists()) {
+      snap.forEach(child => {
+        customers.push({ id: child.key, ...child.val() });
+      });
+    }
+
+    // Merge pending outbox items
+    const pendingOutbox = await getOutboxItems(companyId);
+    const pendingCusts = pendingOutbox
+      .filter(item => item.actionType === 'create_customer' && item.payload?.customer)
+      .map(item => ({
+        ...item.payload.customer,
+        id: item.payload.customerId || item.payload.customer.id,
+        isPendingSync: true,
+      }));
+
+    const custMap = new Map();
+    customers.forEach(c => custMap.set(c.id, c));
+    pendingCusts.forEach(c => custMap.set(c.id, c));
+
+    const merged = Array.from(custMap.values());
+    await cacheCollection(companyId, 'customers', merged);
+    return merged;
+  } catch (err) {
+    console.warn('[Customer Service] Failed to fetch customers from server, returning cache:', err);
+    return getCachedCollection(companyId, 'customers');
+  }
 }
 
 export async function getCustomer(companyId, customerId) {
-  const snap = await get(ref(database, `companies/${companyId}/customers/${customerId}`));
-  return snap.exists() ? { id: customerId, ...snap.val() } : null;
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return getCustomerOffline(companyId, customerId);
+  }
+
+  try {
+    const snap = await get(ref(database, `companies/${companyId}/customers/${customerId}`));
+    if (snap.exists()) {
+      return { id: customerId, ...snap.val() };
+    }
+    return getCustomerOffline(companyId, customerId);
+  } catch (err) {
+    return getCustomerOffline(companyId, customerId);
+  }
+}
+
+async function getCustomerOffline(companyId, customerId) {
+  const outboxItems = await getOutboxItems(companyId);
+  const foundOutbox = outboxItems.find(
+    i => i.actionType === 'create_customer' && 
+         (i.payload?.customerId === customerId || i.payload?.customer?.id === customerId)
+  );
+  if (foundOutbox && foundOutbox.payload?.customer) {
+    return { ...foundOutbox.payload.customer, id: customerId, isPendingSync: true };
+  }
+
+  const cached = await getCachedCollection(companyId, 'customers');
+  return cached.find(c => c.id === customerId) || null;
 }
 
 export async function deleteCustomer(companyId, customerId, shopName, userId, userName) {

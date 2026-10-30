@@ -2,6 +2,7 @@
 import { ref, push, get, update, remove, set } from 'firebase/database';
 import { database } from '../firebase';
 import { generateId } from '../utils/codeGenerator';
+import { saveToOutbox, addToCachedCollection, cacheCollection, getCachedCollection, getOutboxItems } from './offlineStorage';
 
 export async function createProduct(companyId, productData, userId, userName) {
   const nameTrimmed = (productData.name || '').trim();
@@ -53,62 +54,106 @@ export async function createProduct(companyId, productData, userId, userName) {
     updatedAt: Date.now(),
   };
 
-  const updates = {};
-  updates[`companies/${companyId}/products/${productId}`] = product;
+  // If offline, save locally
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return createProductOffline(companyId, productId, product, nameTrimmed, userId, userName);
+  }
 
-  // Activity log
+  try {
+    const updates = {};
+    updates[`companies/${companyId}/products/${productId}`] = product;
+
+    // Activity log
+    const actId = generateId('act');
+    updates[`companies/${companyId}/activities/${actId}`] = {
+      userId: userId || '',
+      userName: userName || 'User',
+      action: `${userName || 'User'} added product "${nameTrimmed}"`,
+      entityType: 'product',
+      entityId: productId,
+      timestamp: Date.now(),
+    };
+
+    // If supplier name is provided with initial stock, also record initial stock purchase
+    if (productData.supplierName && Number(productData.currentStock) > 0) {
+      const purId = generateId('pur');
+      const cost = Number(productData.purchasePrice) || 0;
+      const qty = Number(productData.currentStock) || 0;
+      const total = cost * qty;
+
+      let purchaseTimestamp = Date.now();
+      if (productData.purchaseDate) {
+        const selectedDate = new Date(productData.purchaseDate);
+        const now = new Date();
+        selectedDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
+        purchaseTimestamp = selectedDate.getTime();
+      }
+
+      updates[`companies/${companyId}/purchases/${purId}`] = {
+        id: purId,
+        companyId,
+        supplierName: productData.supplierName,
+        reference: productData.reference || 'Initial Stock',
+        grandTotal: total,
+        items: [{
+          productId: productId,
+          productName: nameTrimmed,
+          sku: skuTrimmed,
+          quantity: qty,
+          purchasePrice: cost,
+          salePrice: Number(productData.salePrice) || 0,
+          lineTotal: total
+        }],
+        notes: productData.notes ? productData.notes : `Initial stock purchase for ${nameTrimmed}`,
+        createdBy: userId || '',
+        createdByName: userName || 'User',
+        createdAt: purchaseTimestamp,
+        updatedAt: Date.now()
+      };
+    }
+
+    // Update onboarding
+    updates[`companies/${companyId}/onboarding/firstProduct`] = true;
+
+    await update(ref(database), updates);
+    await addToCachedCollection(companyId, 'products', { id: productId, ...product });
+    return productId;
+  } catch (err) {
+    if (!navigator.onLine || err.message?.includes('network') || err.message?.includes('Failed to fetch')) {
+      console.warn('[Product Service] Network write failed, saving to offline outbox:', err);
+      return createProductOffline(companyId, productId, product, nameTrimmed, userId, userName);
+    }
+    throw err;
+  }
+}
+
+async function createProductOffline(companyId, productId, product, nameTrimmed, userId, userName) {
+  const localProduct = { ...product, id: productId, isPendingSync: true };
   const actId = generateId('act');
-  updates[`companies/${companyId}/activities/${actId}`] = {
+  const activity = {
+    id: actId,
     userId: userId || '',
     userName: userName || 'User',
-    action: `${userName || 'User'} added product "${nameTrimmed}"`,
+    action: `${userName || 'User'} added product "${nameTrimmed}" (Offline)`,
     entityType: 'product',
     entityId: productId,
     timestamp: Date.now(),
   };
 
-  // If supplier name is provided with initial stock, also record initial stock purchase
-  if (productData.supplierName && Number(productData.currentStock) > 0) {
-    const purId = generateId('pur');
-    const cost = Number(productData.purchasePrice) || 0;
-    const qty = Number(productData.currentStock) || 0;
-    const total = cost * qty;
+  await saveToOutbox({
+    companyId,
+    actionType: 'create_product',
+    payload: {
+      productId,
+      product: localProduct,
+      activity
+    },
+    userId,
+    userName,
+    description: `Product "${nameTrimmed}"`
+  });
 
-    let purchaseTimestamp = Date.now();
-    if (productData.purchaseDate) {
-      const selectedDate = new Date(productData.purchaseDate);
-      const now = new Date();
-      selectedDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
-      purchaseTimestamp = selectedDate.getTime();
-    }
-
-    updates[`companies/${companyId}/purchases/${purId}`] = {
-      id: purId,
-      companyId,
-      supplierName: productData.supplierName,
-      reference: productData.reference || 'Initial Stock',
-      grandTotal: total,
-      items: [{
-        productId: productId,
-        productName: nameTrimmed,
-        sku: skuTrimmed,
-        quantity: qty,
-        purchasePrice: cost,
-        salePrice: Number(productData.salePrice) || 0,
-        lineTotal: total
-      }],
-      notes: productData.notes ? productData.notes : `Initial stock purchase for ${nameTrimmed}`,
-      createdBy: userId || '',
-      createdByName: userName || 'User',
-      createdAt: purchaseTimestamp,
-      updatedAt: Date.now()
-    };
-  }
-
-  // Update onboarding
-  updates[`companies/${companyId}/onboarding/firstProduct`] = true;
-
-  await update(ref(database), updates);
+  await addToCachedCollection(companyId, 'products', localProduct);
   return productId;
 }
 
@@ -181,21 +226,73 @@ export async function updateProduct(companyId, productId, productData, userId, u
 }
 
 export async function getProducts(companyId) {
-  const snap = await get(ref(database, `companies/${companyId}/products`));
-  if (!snap.exists()) return [];
-  const products = [];
-  snap.forEach(child => {
-    const val = child.val();
-    if (val && val.name && String(val.name).trim()) {
-      products.push({ id: child.key, ...val });
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return getCachedCollection(companyId, 'products');
+  }
+
+  try {
+    const snap = await get(ref(database, `companies/${companyId}/products`));
+    const products = [];
+    if (snap.exists()) {
+      snap.forEach(child => {
+        const val = child.val();
+        if (val && val.name && String(val.name).trim()) {
+          products.push({ id: child.key, ...val });
+        }
+      });
     }
-  });
-  return products;
+
+    // Merge pending outbox products
+    const pendingOutbox = await getOutboxItems(companyId);
+    const pendingProds = pendingOutbox
+      .filter(item => item.actionType === 'create_product' && item.payload?.product)
+      .map(item => ({
+        ...item.payload.product,
+        id: item.payload.productId || item.payload.product.id,
+        isPendingSync: true,
+      }));
+
+    const prodMap = new Map();
+    products.forEach(p => prodMap.set(p.id, p));
+    pendingProds.forEach(p => prodMap.set(p.id, p));
+
+    const merged = Array.from(prodMap.values());
+    await cacheCollection(companyId, 'products', merged);
+    return merged;
+  } catch (err) {
+    console.warn('[Product Service] Server fetch failed, returning cached products:', err);
+    return getCachedCollection(companyId, 'products');
+  }
 }
 
 export async function getProduct(companyId, productId) {
-  const snap = await get(ref(database, `companies/${companyId}/products/${productId}`));
-  return snap.exists() ? { id: productId, ...snap.val() } : null;
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return getProductOffline(companyId, productId);
+  }
+
+  try {
+    const snap = await get(ref(database, `companies/${companyId}/products/${productId}`));
+    if (snap.exists()) {
+      return { id: productId, ...snap.val() };
+    }
+    return getProductOffline(companyId, productId);
+  } catch (err) {
+    return getProductOffline(companyId, productId);
+  }
+}
+
+async function getProductOffline(companyId, productId) {
+  const outboxItems = await getOutboxItems(companyId);
+  const foundOutbox = outboxItems.find(
+    i => i.actionType === 'create_product' && 
+         (i.payload?.productId === productId || i.payload?.product?.id === productId)
+  );
+  if (foundOutbox && foundOutbox.payload?.product) {
+    return { ...foundOutbox.payload.product, id: productId, isPendingSync: true };
+  }
+
+  const cached = await getCachedCollection(companyId, 'products');
+  return cached.find(p => p.id === productId) || null;
 }
 
 export async function deleteProduct(companyId, productId, productName, userId, userName) {

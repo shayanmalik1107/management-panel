@@ -1,6 +1,7 @@
 import { ref, get, update } from 'firebase/database';
 import { database } from '../firebase';
 import { generateId } from '../utils/codeGenerator';
+import { saveToOutbox, addToCachedCollection, cacheCollection, getCachedCollection, getOutboxItems } from './offlineStorage';
 
 export async function createSupplierPayment(companyId, paymentData, userId, userName) {
   const paymentId = generateId('pay');
@@ -122,25 +123,81 @@ export async function createCustomerPaymentReceived(companyId, paymentData, user
     throw new Error('Payment amount must be greater than 0');
   }
 
-  // Fetch target customer to check current credit balance
-  const custSnap = await get(ref(database, `companies/${companyId}/customers/${paymentData.customerId}`));
-  if (!custSnap.exists()) {
-    throw new Error('Selected customer / shop was not found');
+  // If offline, process locally
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return createCustomerPaymentOffline(companyId, paymentData, payAmount, userId, userName);
   }
 
-  const customer = custSnap.val();
+  try {
+    // Fetch target customer to check current credit balance
+    const custSnap = await get(ref(database, `companies/${companyId}/customers/${paymentData.customerId}`));
+    if (!custSnap.exists()) {
+      throw new Error('Selected customer / shop was not found');
+    }
+
+    const customer = custSnap.val();
+    const currentCredit = Number(customer.currentBalance) || 0;
+
+    // Strict Validation: Cannot write more amount than credit!
+    if (payAmount > currentCredit) {
+      throw new Error(`Payment amount (Rs ${payAmount}) cannot exceed shop's current credit balance of Rs ${currentCredit}`);
+    }
+
+    const paymentId = generateId('pay');
+    const newCreditBalance = Math.max(0, currentCredit - payAmount);
+
+    const payment = {
+      ...paymentData,
+      companyId,
+      customerId: paymentData.customerId,
+      customerName: customer.shopName || customer.customerName || 'Shop',
+      amount: payAmount,
+      type: 'customer_payment',
+      paymentMethod: paymentData.paymentMethod || 'Cash',
+      reference: paymentData.reference || '',
+      notes: paymentData.notes || '',
+      createdBy: userId || '',
+      createdByName: userName || 'User',
+      createdAt: paymentData.createdAt || Date.now(),
+    };
+
+    const updates = {};
+    updates[`companies/${companyId}/payments/${paymentId}`] = payment;
+    updates[`companies/${companyId}/customers/${paymentData.customerId}/currentBalance`] = newCreditBalance;
+    updates[`companies/${companyId}/customers/${paymentData.customerId}/updatedAt`] = Date.now();
+
+    const actId = generateId('act');
+    updates[`companies/${companyId}/activities/${actId}`] = {
+      userId: userId || '',
+      userName: userName || 'User',
+      action: `${userName || 'User'} received payment of Rs ${payAmount} from shop "${customer.shopName || 'Shop'}"`,
+      entityType: 'payment',
+      entityId: paymentId,
+      timestamp: Date.now(),
+    };
+
+    await update(ref(database), updates);
+    await addToCachedCollection(companyId, 'customer_payments', { id: paymentId, ...payment });
+    return paymentId;
+  } catch (err) {
+    if (!navigator.onLine || err.message?.includes('network') || err.message?.includes('Failed to fetch')) {
+      console.warn('[Payment Service] Network write failed, saving to offline outbox:', err);
+      return createCustomerPaymentOffline(companyId, paymentData, payAmount, userId, userName);
+    }
+    throw err;
+  }
+}
+
+async function createCustomerPaymentOffline(companyId, paymentData, payAmount, userId, userName) {
+  const cachedCusts = await getCachedCollection(companyId, 'customers');
+  const customer = cachedCusts.find(c => c.id === paymentData.customerId) || {};
   const currentCredit = Number(customer.currentBalance) || 0;
-
-  // Strict Validation: Cannot write more amount than credit!
-  if (payAmount > currentCredit) {
-    throw new Error(`Payment amount (Rs ${payAmount}) cannot exceed shop's current credit balance of Rs ${currentCredit}`);
-  }
-
-  const paymentId = generateId('pay');
   const newCreditBalance = Math.max(0, currentCredit - payAmount);
 
+  const paymentId = generateId('pay');
   const payment = {
     ...paymentData,
+    id: paymentId,
     companyId,
     customerId: paymentData.customerId,
     customerName: customer.shopName || customer.customerName || 'Shop',
@@ -152,37 +209,72 @@ export async function createCustomerPaymentReceived(companyId, paymentData, user
     createdBy: userId || '',
     createdByName: userName || 'User',
     createdAt: paymentData.createdAt || Date.now(),
+    isPendingSync: true,
   };
 
-  const updates = {};
-  updates[`companies/${companyId}/payments/${paymentId}`] = payment;
-  updates[`companies/${companyId}/customers/${paymentData.customerId}/currentBalance`] = newCreditBalance;
-  updates[`companies/${companyId}/customers/${paymentData.customerId}/updatedAt`] = Date.now();
-
   const actId = generateId('act');
-  updates[`companies/${companyId}/activities/${actId}`] = {
+  const activity = {
     userId: userId || '',
     userName: userName || 'User',
-    action: `${userName || 'User'} received payment of Rs ${payAmount} from shop "${customer.shopName || 'Shop'}"`,
+    action: `${userName || 'User'} received payment of Rs ${payAmount} from shop "${customer.shopName || 'Shop'}" (Offline)`,
     entityType: 'payment',
     entityId: paymentId,
     timestamp: Date.now(),
   };
 
-  await update(ref(database), updates);
+  await saveToOutbox({
+    companyId,
+    actionType: 'create_payment',
+    payload: {
+      paymentId,
+      payment,
+      customerId: paymentData.customerId,
+      newCreditBalance,
+      activity
+    },
+    userId,
+    userName,
+    description: `Payment Rs ${payAmount} from "${customer.shopName || 'Shop'}"`
+  });
+
+  await addToCachedCollection(companyId, 'customer_payments', payment);
   return paymentId;
 }
 
 export async function getCustomerPayments(companyId) {
-  const snap = await get(ref(database, `companies/${companyId}/payments`));
-  if (!snap.exists()) return [];
-  const payments = [];
-  snap.forEach(child => {
-    const p = child.val();
-    if (p.type === 'customer_payment') {
-      payments.push({ id: child.key, ...p });
-    }
-  });
-  return payments.sort((a, b) => b.createdAt - a.createdAt);
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return getCachedCollection(companyId, 'customer_payments');
+  }
+
+  try {
+    const snap = await get(ref(database, `companies/${companyId}/payments`));
+    if (!snap.exists()) return [];
+    const payments = [];
+    snap.forEach(child => {
+      const p = child.val();
+      if (p.type === 'customer_payment') {
+        payments.push({ id: child.key, ...p });
+      }
+    });
+
+    const pendingOutbox = await getOutboxItems(companyId);
+    const pendingPays = pendingOutbox
+      .filter(item => item.actionType === 'create_payment' && item.payload?.payment)
+      .map(item => ({
+        ...item.payload.payment,
+        id: item.payload.paymentId || item.payload.payment.id,
+        isPendingSync: true,
+      }));
+
+    const payMap = new Map();
+    payments.forEach(p => payMap.set(p.id, p));
+    pendingPays.forEach(p => payMap.set(p.id, p));
+
+    const merged = Array.from(payMap.values()).sort((a, b) => b.createdAt - a.createdAt);
+    await cacheCollection(companyId, 'customer_payments', merged);
+    return merged;
+  } catch (err) {
+    return getCachedCollection(companyId, 'customer_payments');
+  }
 }
 

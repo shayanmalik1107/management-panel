@@ -1,4 +1,5 @@
 // Sidebar Navigation Component
+import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -17,16 +18,19 @@ import {
   ChevronLeft,
   Building2,
   Sparkles,
+  Download,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { logout } from '../../services/authService';
 import { useToast } from '../../contexts/ToastContext';
 import WhatsAppButton from '../common/WhatsAppButton';
+import InstallAppModal from '../common/InstallAppModal';
 
 export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }) {
   const { userProfile, companyInfo, isAdmin, currentUser } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
+  const [showInstallModal, setShowInstallModal] = useState(false);
 
   const handleLogout = async () => {
     try {
@@ -138,6 +142,36 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
           ))}
         </nav>
 
+        {/* Install Native Desktop / Mobile App */}
+        <div style={{
+          padding: collapsed ? '4px 8px' : '4px 14px',
+          borderTop: 'var(--border)',
+        }}>
+          <button
+            type="button"
+            onClick={() => setShowInstallModal(true)}
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: collapsed ? 'center' : 'flex-start',
+              gap: '8px',
+              padding: '7px 10px',
+              borderRadius: '8px',
+              border: '1px solid var(--color-border, #cbd5e1)',
+              background: 'var(--color-bg-secondary, #f8fafc)',
+              color: 'var(--color-text-primary, #0f172a)',
+              cursor: 'pointer',
+              fontWeight: 600,
+              fontSize: '12px',
+            }}
+            title="Install App for Desktop & Mobile"
+          >
+            <Download size={15} color="#0284c7" />
+            {!collapsed && <span>Install App</span>}
+          </button>
+        </div>
+
         {/* WhatsApp Queries / Support in Side Drawer */}
         <div style={{
           padding: collapsed ? '8px 8px 10px' : '8px 14px 10px',
@@ -164,6 +198,11 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
           </div>
         </div>
       </aside>
+
+      <InstallAppModal
+        isOpen={showInstallModal}
+        onClose={() => setShowInstallModal(false)}
+      />
     </>
   );
 }

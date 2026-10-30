@@ -577,6 +577,7 @@ export async function registerEmployee({ name, email, password, adminCode }) {
     companyId: companyId,
     adminUid: adminUid,
     status: 'active',
+    canEditPrice: true,
     permissions: { ...DEFAULT_PERMISSIONS },
     createdAt: Date.now(),
   };
@@ -586,6 +587,7 @@ export async function registerEmployee({ name, email, password, adminCode }) {
     email: email,
     role: 'employee',
     status: 'active',
+    canEditPrice: true,
     joinedAt: Date.now(),
   };
 

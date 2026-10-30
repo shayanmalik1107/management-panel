@@ -11,7 +11,8 @@ import { formatCurrency, getLocalDateString } from '../../utils/formatters';
 export default function CreateOrder() {
   const { id } = useParams();
   const isEditMode = Boolean(id);
-  const { companyId, currentUser, userProfile, hasPermission, companyInfo, isAdmin } = useAuth();
+  const { companyId, currentUser, userProfile, hasPermission, companyInfo, isAdmin, canEditOrderPrice } = useAuth();
+  const canEditPrice = canEditOrderPrice;
   const navigate = useNavigate();
   const toast = useToast();
   
@@ -158,7 +159,7 @@ export default function CreateOrder() {
 
   // Calculations
   const subtotal = orderItems.reduce((sum, item) => {
-    return sum + (item.salePrice * (Number(item.quantity) || 0));
+    return sum + ((Number(item.salePrice) || 0) * (Number(item.quantity) || 0));
   }, 0);
   
   const discountAmount = subtotal * (discount / 100);
@@ -482,9 +483,25 @@ export default function CreateOrder() {
                               )}
                             </td>
                             <td>
-                              <div className="font-medium" style={{ padding: '6px 0' }}>
-                                {formatCurrency(item.salePrice, currency)}
-                              </div>
+                              {canEditPrice ? (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                  <span className="text-xs text-muted" style={{ fontWeight: 600 }}>{currency}</span>
+                                  <input 
+                                    type="number" 
+                                    className="form-input" 
+                                    style={{ padding: '6px 8px', fontSize: 'var(--font-size-sm)', width: '90px' }}
+                                    value={item.salePrice}
+                                    onChange={(e) => updateItem(idx, 'salePrice', e.target.value)}
+                                    min="0"
+                                    step="any"
+                                    title="Edit product sale price"
+                                  />
+                                </div>
+                              ) : (
+                                <div className="font-medium" style={{ padding: '6px 0' }}>
+                                  {formatCurrency(item.salePrice, currency)}
+                                </div>
+                              )}
                             </td>
                             <td>
                               <input 
@@ -502,7 +519,7 @@ export default function CreateOrder() {
                               )}
                             </td>
                             <td className="font-medium">
-                              {formatCurrency(item.salePrice * item.quantity, currency)}
+                              {formatCurrency((Number(item.salePrice) || 0) * (Number(item.quantity) || 0), currency)}
                             </td>
                             <td>
                               <button className="table-action-btn" style={{ color: 'var(--danger-500)' }} onClick={() => removeItem(idx)}>
@@ -533,10 +550,26 @@ export default function CreateOrder() {
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                           <div style={{ flex: 1, minWidth: 0, paddingRight: '8px' }}>
                             <div className="font-medium" style={{ fontSize: 'var(--font-size-base)', wordBreak: 'break-word' }}>{item.productName}</div>
-                            <div className="text-xs text-muted" style={{ display: 'flex', gap: '8px', marginTop: '2px', flexWrap: 'wrap' }}>
+                            <div className="text-xs text-muted" style={{ display: 'flex', gap: '8px', marginTop: '2px', flexWrap: 'wrap', alignItems: 'center' }}>
                               <span>Stock: {item.currentStock}</span>
                               <span>•</span>
-                              <span>Price: {formatCurrency(item.salePrice, currency)}</span>
+                              {canEditPrice ? (
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                  Price: {currency}
+                                  <input 
+                                    type="number" 
+                                    className="form-input" 
+                                    style={{ padding: '2px 6px', fontSize: '11px', width: '75px', display: 'inline-block' }}
+                                    value={item.salePrice}
+                                    onChange={(e) => updateItem(idx, 'salePrice', e.target.value)}
+                                    min="0"
+                                    step="any"
+                                    title="Edit unit sale price"
+                                  />
+                                </span>
+                              ) : (
+                                <span>Price: {formatCurrency(item.salePrice, currency)}</span>
+                              )}
                             </div>
                             {item.returnedQty > 0 && (
                               <div style={{ fontSize: '11px', color: 'var(--danger-600)', fontWeight: 600, marginTop: 2 }}>
@@ -569,7 +602,7 @@ export default function CreateOrder() {
                           <div style={{ textAlign: 'right' }}>
                             <span className="text-xs text-muted" style={{ display: 'block' }}>Total</span>
                             <span className="font-bold text-primary-600" style={{ fontSize: 'var(--font-size-base)' }}>
-                              {formatCurrency(item.salePrice * item.quantity, currency)}
+                              {formatCurrency((Number(item.salePrice) || 0) * (Number(item.quantity) || 0), currency)}
                             </span>
                           </div>
                         </div>

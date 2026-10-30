@@ -1,32 +1,34 @@
 import { useState } from 'react';
 import { Filter, Calendar, Minus, Plus, RefreshCw, ChevronDown } from 'lucide-react';
+import { getLocalDateString } from '../../utils/formatters';
 
 export default function FilterPanel({
   title = 'Order Filters',
   subtitle = 'Filter and analyze records by date range',
   icon: IconComponent = Filter,
-  
+  initialExpanded = true,
+
   // Period filter (Daily, Weekly, Monthly)
   period = '',
   setPeriod = () => {},
-  
+
   // Date Range Pickers
   startDate = '',
   setStartDate = () => {},
   endDate = '',
   setEndDate = () => {},
-  
+
   // Quick Filters (Today, This Week, This Month)
   quickFilter = '',
   setQuickFilter = () => {},
-  
+
   // Dropdown 1 (e.g. Shop / Supplier / Customer)
   dropdown1Label = 'Shop',
   dropdown1Value = '',
   setDropdown1Value = () => {},
   dropdown1Options = [], // array of { value, label } or strings
   dropdown1Icon: Dropdown1Icon = ChevronDown,
-  
+
   // Dropdown 2 (e.g. Created By / Payment Mode / Status)
   dropdown2Label = 'Created By',
   dropdown2Value = '',
@@ -36,11 +38,11 @@ export default function FilterPanel({
 
   // Additional custom fields or search if needed
   extraFields = null,
-  
+
   // Reset Callback
   onReset = null
 }) {
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(initialExpanded);
 
   const handlePeriodClick = (pVal) => {
     if (period === pVal) {
@@ -48,11 +50,11 @@ export default function FilterPanel({
       return;
     }
     setPeriod(pVal);
-    
+
     // Set appropriate start/end date range for period
     const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
-    
+    const todayStr = getLocalDateString(now);
+
     if (pVal === 'daily') {
       setStartDate(todayStr);
       setEndDate(todayStr);
@@ -61,12 +63,12 @@ export default function FilterPanel({
       const firstDay = new Date(now);
       const day = now.getDay() || 7;
       if (day !== 1) firstDay.setDate(now.getDate() - (day - 1));
-      setStartDate(firstDay.toISOString().split('T')[0]);
+      setStartDate(getLocalDateString(firstDay));
       setEndDate(todayStr);
       setQuickFilter('this_week');
     } else if (pVal === 'monthly') {
       const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
-      setStartDate(firstDay.toISOString().split('T')[0]);
+      setStartDate(getLocalDateString(firstDay));
       setEndDate(todayStr);
       setQuickFilter('this_month');
     }
@@ -79,7 +81,7 @@ export default function FilterPanel({
     }
     setQuickFilter(qVal);
     const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
+    const todayStr = getLocalDateString(now);
 
     if (qVal === 'today') {
       setStartDate(todayStr);
@@ -89,12 +91,12 @@ export default function FilterPanel({
       const firstDay = new Date(now);
       const day = now.getDay() || 7;
       if (day !== 1) firstDay.setDate(now.getDate() - (day - 1));
-      setStartDate(firstDay.toISOString().split('T')[0]);
+      setStartDate(getLocalDateString(firstDay));
       setEndDate(todayStr);
       setPeriod('weekly');
     } else if (qVal === 'this_month') {
       const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
-      setStartDate(firstDay.toISOString().split('T')[0]);
+      setStartDate(getLocalDateString(firstDay));
       setEndDate(todayStr);
       setPeriod('monthly');
     }

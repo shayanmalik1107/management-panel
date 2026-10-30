@@ -849,14 +849,21 @@ export default function LambaVoiceAssistant() {
           if (pSnap && pSnap.exists()) {
             currentProducts = Object.entries(pSnap.val()).map(([id, p]) => ({ id, ...p }));
           }
-          if (cSnap && cSnap.exists()) {
-            currentCustomers = Object.entries(cSnap.val()).map(([id, c]) => ({ id, ...c }));
-          }
           if (oSnap && oSnap.exists()) {
             const allO = Object.entries(oSnap.val()).map(([id, o]) => ({ id, ...o }));
             currentOrders = isAdmin
               ? allO
               : allO.filter(o => o.createdBy === currentUser?.uid || o.employeeId === currentUser?.uid || o.createdByName === userProfile?.name);
+          }
+          if (cSnap && cSnap.exists()) {
+            const allC = Object.entries(cSnap.val()).map(([id, c]) => ({ id, ...c }));
+            currentCustomers = isAdmin
+              ? allC
+              : allC.filter(c =>
+                  c.createdBy === currentUser?.uid ||
+                  c.createdByName === userProfile?.name ||
+                  currentOrders.some(o => o.customerId === c.id)
+                );
           }
           if (purSnap && purSnap.exists()) {
             currentPurchases = Object.entries(purSnap.val()).map(([id, p]) => ({ id, ...p }));

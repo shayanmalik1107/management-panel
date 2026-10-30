@@ -101,6 +101,8 @@ export function AuthProvider({ children }) {
     return permissions[permission] === true;
   };
 
+  const canEditOrderPrice = isAdmin || userProfile?.canEditPrice !== false;
+
   const value = {
     currentUser,
     userProfile,
@@ -113,6 +115,7 @@ export function AuthProvider({ children }) {
     isCompanyClosed,
     isCompanyPending,
     hasPermission,
+    canEditOrderPrice,
     loading,
   };
 

@@ -15,6 +15,7 @@ import {
 } from 'recharts';
 import OnboardingChecklist from '../onboarding/OnboardingChecklist';
 import DemoDataManager from './DemoDataManager';
+import FilterPanel from '../common/FilterPanel';
 import { setupCompany } from '../../services/authService';
 import { useToast } from '../../contexts/ToastContext';
 import WhatsAppButton from '../common/WhatsAppButton';
@@ -31,6 +32,10 @@ export default function AdminDashboard() {
   const [isSettingUp, setIsSettingUp] = useState(false);
   const [setupForm, setSetupForm] = useState({ companyName: '', phone: '' });
   const [dateRange, setDateRange] = useState('this_month');
+  const [filterStartDate, setFilterStartDate] = useState('');
+  const [filterEndDate, setFilterEndDate] = useState('');
+  const [filterPeriod, setFilterPeriod] = useState('');
+  const [quickFilter, setQuickFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     totalSales: 0, paymentsReceived: 0, totalOrders: 0,
@@ -69,7 +74,21 @@ export default function AdminDashboard() {
     let debugSnapCount = -1;
 
     const recalculate = () => {
-      const currentRange = getDateRange(dateRange);
+      let currentRange;
+      if (filterStartDate) {
+        const [sY, sM, sD] = filterStartDate.split('-').map(Number);
+        const sTime = new Date(sY, sM - 1, sD, 0, 0, 0, 0).getTime();
+        let eTime;
+        if (filterEndDate) {
+          const [eY, eM, eD] = filterEndDate.split('-').map(Number);
+          eTime = new Date(eY, eM - 1, eD, 23, 59, 59, 999).getTime();
+        } else {
+          eTime = new Date(sY, sM - 1, sD, 23, 59, 59, 999).getTime();
+        }
+        currentRange = { start: sTime, end: eTime };
+      } else {
+        currentRange = getDateRange(dateRange);
+      }
       const rangeOrders = latestOrders.filter(o => o && o.createdAt && o.createdAt >= currentRange.start && o.createdAt <= currentRange.end + 5000);
       const activeOrders = rangeOrders.filter(o => o.status !== 'cancelled' && o.status !== 'returned');
 
@@ -263,7 +282,7 @@ export default function AdminDashboard() {
     unsubs.push(activitiesUnsub);
 
     return () => unsubs.forEach(u => u());
-  }, [companyId, dateRange]);
+  }, [companyId, dateRange, filterStartDate, filterEndDate]);
 
   const handleSetupCompany = async (e) => {
     e.preventDefault();
@@ -462,6 +481,35 @@ export default function AdminDashboard() {
             <Plus size={16} /> New Order
           </button>
         </div>
+      </div>
+
+      {/* Collapsible Dashboard Filters (Initially Collapsed) */}
+      <div style={{ marginBottom: 'var(--space-5)' }}>
+        <FilterPanel
+          title="Dashboard Filters"
+          subtitle="Filter and analyze store performance by date range"
+          initialExpanded={false}
+          period={filterPeriod}
+          setPeriod={setFilterPeriod}
+          startDate={filterStartDate}
+          setStartDate={setFilterStartDate}
+          endDate={filterEndDate}
+          setEndDate={setFilterEndDate}
+          quickFilter={quickFilter}
+          setQuickFilter={(q) => {
+            setQuickFilter(q);
+            if (q === 'today') setDateRange('today');
+            else if (q === 'this_week') setDateRange('7days');
+            else if (q === 'this_month') setDateRange('this_month');
+          }}
+          onReset={() => {
+            setFilterStartDate('');
+            setFilterEndDate('');
+            setFilterPeriod('');
+            setQuickFilter('');
+            setDateRange('this_month');
+          }}
+        />
       </div>
 
       {/* Sales & Accounts Receivable Section */}

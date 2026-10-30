@@ -82,6 +82,22 @@ export default function EmployeesList() {
     }
   };
 
+  const handleTogglePriceEdit = async (emp) => {
+    if (emp.role === 'admin') return;
+    const currentVal = emp.canEditPrice !== false;
+    const newVal = !currentVal;
+    try {
+      const updates = {};
+      updates[`companies/${companyId}/employees/${emp.uid}/canEditPrice`] = newVal;
+      updates[`users/${emp.uid}/canEditPrice`] = newVal;
+      await update(ref(database), updates);
+      toast.success(`${emp.name || emp.email}'s price editing is now ${newVal ? 'Allowed' : 'Restricted'}`);
+    } catch (err) {
+      console.error('Toggle price edit error:', err);
+      toast.error('Failed to update price permission');
+    }
+  };
+
   const handleRemoveEmployee = async (emp) => {
     if (emp.uid === currentUser?.uid) {
       toast.error('You cannot remove yourself');
@@ -185,6 +201,7 @@ export default function EmployeesList() {
                 <tr>
                   <th>Staff Member</th>
                   <th>Role</th>
+                  <th>Price Editing</th>
                   <th>Joined Date</th>
                   <th>Status</th>
                   {isAdmin && <th style={{ textAlign: 'right' }}>Actions</th>}
@@ -211,6 +228,45 @@ export default function EmployeesList() {
                         <span className={`badge ${isEmpAdmin ? 'badge-blue' : 'badge-green'}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', textTransform: 'capitalize' }}>
                           <Shield size={12} /> {emp.role || 'employee'}
                         </span>
+                      </td>
+                      <td>
+                        {isEmpAdmin ? (
+                          <span className="badge badge-blue" style={{ fontSize: '11px', padding: '2px 8px' }} title="Admins always have full price editing access">
+                            Full Access (Admin)
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => isAdmin && handleTogglePriceEdit(emp)}
+                            disabled={!isAdmin}
+                            title={isAdmin ? (emp.canEditPrice !== false ? 'Click to restrict price editing' : 'Click to allow price editing') : ''}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              padding: '4px 10px',
+                              borderRadius: '20px',
+                              fontSize: '12px',
+                              fontWeight: 600,
+                              cursor: isAdmin ? 'pointer' : 'default',
+                              border: emp.canEditPrice !== false ? '1px solid #86efac' : '1px solid #d1d5db',
+                              background: emp.canEditPrice !== false ? '#dcfce7' : '#f3f4f6',
+                              color: emp.canEditPrice !== false ? '#15803d' : '#4b5563',
+                              transition: 'all 0.2s ease',
+                            }}
+                          >
+                            <span
+                              style={{
+                                width: '8px',
+                                height: '8px',
+                                borderRadius: '50%',
+                                backgroundColor: emp.canEditPrice !== false ? '#22c55e' : '#9ca3af',
+                                display: 'inline-block',
+                              }}
+                            />
+                            {emp.canEditPrice !== false ? 'Can Edit Price' : 'Price Locked'}
+                          </button>
+                        )}
                       </td>
                       <td className="text-sm text-muted">
                         {emp.joinedAt ? (

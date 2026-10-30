@@ -2,7 +2,7 @@
   "name": "LAMBA Management Panel",
   "short_name": "LAMBA Panel",
   "description": "Enterprise Offline-First Management Panel & Order Suite",
-  "start_url": "/dashboard",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "any",

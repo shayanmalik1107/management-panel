@@ -357,6 +357,32 @@ export default function InstallAppModal({ isOpen, onClose }) {
                     ✓ Installed as a real standalone app! Opens in full-screen with zero browser bars and works 100% offline.
                   </div>
                 </div>
+
+                <div style={{ marginTop: '10px' }}>
+                  <a
+                    href="https://github.com/shayanmalik1107/management-panel/releases/download/v1.0.0/LAMBA-iOS.ipa"
+                    download="LAMBA-iOS.ipa"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      width: '100%',
+                      padding: '8px 14px',
+                      backgroundColor: '#334155',
+                      color: '#ffffff',
+                      fontWeight: 700,
+                      fontSize: '12px',
+                      borderRadius: '8px',
+                      textDecoration: 'none',
+                    }}
+                  >
+                    <Download size={14} /> Download iOS Native Package (.IPA)
+                  </a>
+                  <div style={{ marginTop: '4px', fontSize: '10.5px', color: '#64748b', textAlign: 'center' }}>
+                    For Xcode / AltStore sideloading on Mac & iPhone
+                  </div>
+                </div>
               </div>
             </div>
           )}

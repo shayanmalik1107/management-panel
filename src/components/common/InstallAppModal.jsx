@@ -158,135 +158,174 @@ export default function InstallAppModal({ isOpen, onClose }) {
               }}>
                 <div style={{ textAlign: 'center', padding: '12px 8px', borderRadius: '10px', backgroundColor: 'var(--color-bg-secondary, #f8fafc)', border: '1px solid var(--color-border, #e2e8f0)' }}>
                   <Zap size={20} color="#0284c7" style={{ margin: '0 auto 4px', display: 'block' }} />
-                  <div style={{ fontSize: '11px', fontWeight: 700 }}>Instant Boot</div>
-                  <div style={{ fontSize: '10px', color: 'var(--color-text-muted, #64748b)' }}>No browser lag</div>
+                  <div style={{ fontSize: '11px', fontWeight: 700 }}>Instant Native Boot</div>
+                  <div style={{ fontSize: '10px', color: 'var(--color-text-muted, #64748b)' }}>No Chrome browser lag</div>
                 </div>
 
                 <div style={{ textAlign: 'center', padding: '12px 8px', borderRadius: '10px', backgroundColor: 'var(--color-bg-secondary, #f8fafc)', border: '1px solid var(--color-border, #e2e8f0)' }}>
                   <HardDrive size={20} color="#10b981" style={{ margin: '0 auto 4px', display: 'block' }} />
                   <div style={{ fontSize: '11px', fontWeight: 700 }}>100% Offline</div>
-                  <div style={{ fontSize: '10px', color: 'var(--color-text-muted, #64748b)' }}>Unlimited storage</div>
+                  <div style={{ fontSize: '10px', color: 'var(--color-text-muted, #64748b)' }}>Previous data loaded</div>
                 </div>
 
                 <div style={{ textAlign: 'center', padding: '12px 8px', borderRadius: '10px', backgroundColor: 'var(--color-bg-secondary, #f8fafc)', border: '1px solid var(--color-border, #e2e8f0)' }}>
                   <ShieldCheck size={20} color="#8b5cf6" style={{ margin: '0 auto 4px', display: 'block' }} />
                   <div style={{ fontSize: '11px', fontWeight: 700 }}>Cloud Auto-Sync</div>
-                  <div style={{ fontSize: '10px', color: 'var(--color-text-muted, #64748b)' }}>Realtime to Firebase</div>
+                  <div style={{ fontSize: '10px', color: 'var(--color-text-muted, #64748b)' }}>Auto upload on reconnect</div>
                 </div>
               </div>
 
-              {/* Install Trigger Button */}
-              {canInstall ? (
+              {/* Desktop Native Software Box */}
+              <div style={{
+                padding: '16px 18px',
+                borderRadius: '14px',
+                background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+                border: '1px solid var(--color-border, #cbd5e1)',
+                marginBottom: '16px',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <span style={{ fontWeight: 800, fontSize: '14px', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Monitor size={17} color="#0284c7" /> Standalone Desktop Software (Mac / Win)
+                  </span>
+                  <span style={{ padding: '2px 8px', borderRadius: '6px', backgroundColor: '#e0f2fe', color: '#0369a1', fontSize: '11px', fontWeight: 700 }}>
+                    Native Electron
+                  </span>
+                </div>
+                <p style={{ margin: '0 0 10px', fontSize: '12px', color: '#475569', lineHeight: 1.5 }}>
+                  A proper standalone desktop software without browser tabs, address bars, or extension icons. Opens instantly even without internet.
+                </p>
+                <div style={{
+                  padding: '10px 14px',
+                  backgroundColor: '#0f172a',
+                  color: '#38bdf8',
+                  borderRadius: '8px',
+                  fontFamily: 'monospace',
+                  fontSize: '12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}>
+                  <span>npm run desktop</span>
+                  <span style={{ fontSize: '11px', color: '#94a3b8' }}>Launch Software</span>
+                </div>
+                <div style={{ fontSize: '11px', color: '#64748b', marginTop: '6px' }}>
+                  Standalone macOS App bundle located at: <code style={{ fontSize: '11px', color: '#0284c7' }}>dist-electron/mac/LAMBA Management Panel.app</code>
+                </div>
+              </div>
+
+              {/* Install PWA as alternate */}
+              {canInstall && (
                 <button
                   type="button"
-                  className="btn btn-primary"
+                  className="btn btn-outline"
                   onClick={handleInstallClick}
                   style={{
                     width: '100%',
-                    padding: '14px 20px',
-                    fontSize: '15px',
-                    fontWeight: 700,
+                    padding: '10px 16px',
+                    fontSize: '13px',
+                    fontWeight: 600,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: '10px',
-                    borderRadius: '12px',
-                    boxShadow: '0 4px 14px 0 rgba(14, 165, 233, 0.39)',
+                    gap: '8px',
+                    borderRadius: '10px',
                   }}
                 >
-                  <Download size={18} />
-                  Install LAMBA Desktop App
+                  <Download size={15} />
+                  Add Quick Shortcut via Browser
                 </button>
-              ) : isAppInstalled || installedSuccess ? (
-                <div style={{
-                  padding: '14px',
-                  borderRadius: '12px',
-                  backgroundColor: '#f0fdf4',
-                  border: '1px solid #bbf7d0',
-                  color: '#166534',
-                  textAlign: 'center',
-                  fontWeight: 600,
-                  fontSize: '14px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                }}>
-                  <Check size={18} />
-                  LAMBA Panel is installed as a Desktop App!
-                </div>
-              ) : (
-                <div style={{
-                  padding: '16px',
-                  borderRadius: '12px',
-                  backgroundColor: 'var(--color-bg-secondary, #f8fafc)',
-                  border: '1px solid var(--color-border, #e2e8f0)',
-                }}>
-                  <div style={{ fontWeight: 700, fontSize: '13px', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Download size={15} color="#0284c7" /> Easy 1-Click Desktop Setup:
-                  </div>
-                  <ol style={{ margin: 0, paddingLeft: '20px', fontSize: '12px', color: 'var(--color-text-muted, #64748b)', lineHeight: 1.6 }}>
-                    <li>Look at the right side of your browser address bar for the <strong>Install App (⊕)</strong> icon.</li>
-                    <li>Click <strong>Install</strong> to add LAMBA to your Applications / Dock / Taskbar.</li>
-                    <li>Launch anytime directly from your desktop, even without Wi-Fi!</li>
-                  </ol>
-                </div>
               )}
             </div>
           ) : (
             <div>
-              {/* Mobile Install Guide */}
+              {/* Feature Pill Row Mobile */}
               <div style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '12px',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: '10px',
                 marginBottom: '16px',
               }}>
-                {/* iOS Safari Box */}
-                <div style={{
-                  padding: '14px 16px',
-                  borderRadius: '12px',
-                  border: '1px solid var(--color-border, #e2e8f0)',
-                  backgroundColor: 'var(--color-bg-secondary, #f8fafc)',
-                }}>
-                  <div style={{ fontWeight: 700, fontSize: '14px', color: '#0f172a', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    🍏 iPhone / iPad (Safari)
-                  </div>
-                  <div style={{ fontSize: '12px', color: 'var(--color-text-muted, #64748b)', lineHeight: 1.6 }}>
-                    1. Tap the <strong>Share</strong> button <Share size={13} style={{ display: 'inline', verticalAlign: 'middle' }} /> at the bottom of Safari.<br />
-                    2. Scroll down and tap <strong>'Add to Home Screen'</strong> <PlusSquare size={13} style={{ display: 'inline', verticalAlign: 'middle' }} />.<br />
-                    3. Tap <strong>'Add'</strong> in the top corner. Opens in full screen!
-                  </div>
+                <div style={{ textAlign: 'center', padding: '10px 6px', borderRadius: '10px', backgroundColor: 'var(--color-bg-secondary, #f8fafc)', border: '1px solid var(--color-border, #e2e8f0)' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 700, color: '#16a34a' }}>📦 APK Ready</div>
+                  <div style={{ fontSize: '10px', color: 'var(--color-text-muted, #64748b)' }}>Real Android App</div>
                 </div>
+                <div style={{ textAlign: 'center', padding: '10px 6px', borderRadius: '10px', backgroundColor: 'var(--color-bg-secondary, #f8fafc)', border: '1px solid var(--color-border, #e2e8f0)' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 700, color: '#0284c7' }}>⚡ 100% Offline</div>
+                  <div style={{ fontSize: '10px', color: 'var(--color-text-muted, #64748b)' }}>Data remains loaded</div>
+                </div>
+                <div style={{ textAlign: 'center', padding: '10px 6px', borderRadius: '10px', backgroundColor: 'var(--color-bg-secondary, #f8fafc)', border: '1px solid var(--color-border, #e2e8f0)' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 700, color: '#8b5cf6' }}>🔄 Auto-Sync</div>
+                  <div style={{ fontSize: '10px', color: 'var(--color-text-muted, #64748b)' }}>Local until online</div>
+                </div>
+              </div>
 
-                {/* Android Chrome Box */}
-                <div style={{
-                  padding: '14px 16px',
-                  borderRadius: '12px',
-                  border: '1px solid var(--color-border, #e2e8f0)',
-                  backgroundColor: 'var(--color-bg-secondary, #f8fafc)',
-                }}>
-                  <div style={{ fontWeight: 700, fontSize: '14px', color: '#0f172a', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    🤖 Android (Chrome)
+              {/* Android APK Download Card */}
+              <div style={{
+                padding: '18px 20px',
+                borderRadius: '16px',
+                background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
+                border: '1.5px solid #86efac',
+                marginBottom: '16px',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <div style={{ fontWeight: 800, fontSize: '15px', color: '#14532d', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    🤖 Android App (.APK Installer)
                   </div>
-                  <div style={{ fontSize: '12px', color: 'var(--color-text-muted, #64748b)', lineHeight: 1.6 }}>
-                    {canInstall ? (
-                      <button
-                        type="button"
-                        className="btn btn-primary btn-sm"
-                        onClick={handleInstallClick}
-                        style={{ marginTop: '4px', width: '100%', fontWeight: 700 }}
-                      >
-                        <Download size={14} /> Tap Here to Install App Now
-                      </button>
-                    ) : (
-                      <>
-                        1. Tap the <strong>three dots (⋮)</strong> in Chrome top-right.<br />
-                        2. Tap <strong>'Install app'</strong> or <strong>'Add to Home screen'</strong>.<br />
-                        3. Confirm install.
-                      </>
-                    )}
-                  </div>
+                  <span style={{ padding: '3px 8px', borderRadius: '6px', backgroundColor: '#15803d', color: '#ffffff', fontSize: '11px', fontWeight: 700 }}>
+                    5.3 MB
+                  </span>
+                </div>
+                <p style={{ margin: '0 0 14px', fontSize: '12px', color: '#166534', lineHeight: 1.5 }}>
+                  Real standalone Android application. Opens without Chrome browser, logs in offline from saved session, loads previous records instantly, and auto-syncs orders to Firebase when internet returns.
+                </p>
+
+                <a
+                  href="/downloads/lamba.apk"
+                  download="lamba.apk"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '10px',
+                    width: '100%',
+                    padding: '13px 20px',
+                    backgroundColor: '#16a34a',
+                    color: '#ffffff',
+                    fontWeight: 800,
+                    fontSize: '14px',
+                    borderRadius: '12px',
+                    textDecoration: 'none',
+                    boxShadow: '0 4px 14px 0 rgba(22, 163, 74, 0.35)',
+                    transition: 'all 0.2s ease',
+                  }}
+                >
+                  <Download size={18} /> Download Android APK (lamba.apk)
+                </a>
+
+                <div style={{ marginTop: '12px', padding: '10px', backgroundColor: 'rgba(255,255,255,0.7)', borderRadius: '8px', fontSize: '11px', color: '#15803d', lineHeight: 1.5 }}>
+                  <strong>How to Install:</strong>
+                  <ol style={{ margin: '4px 0 0', paddingLeft: '18px' }}>
+                    <li>Click <strong>Download Android APK</strong> on your phone or computer.</li>
+                    <li>Tap the downloaded <code>lamba.apk</code> and choose <strong>Install</strong> (Allow from this source if prompted).</li>
+                    <li>Open <strong>LAMBA</strong> directly from your home screen!</li>
+                  </ol>
+                </div>
+              </div>
+
+              {/* iOS Safari Box */}
+              <div style={{
+                padding: '14px 16px',
+                borderRadius: '12px',
+                border: '1px solid var(--color-border, #e2e8f0)',
+                backgroundColor: 'var(--color-bg-secondary, #f8fafc)',
+              }}>
+                <div style={{ fontWeight: 700, fontSize: '13px', color: '#0f172a', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  🍏 iPhone / iPad (Safari)
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--color-text-muted, #64748b)', lineHeight: 1.6 }}>
+                  1. Tap <strong>Share</strong> <Share size={13} style={{ display: 'inline', verticalAlign: 'middle' }} /> at the bottom of Safari.<br />
+                  2. Select <strong>'Add to Home Screen'</strong> <PlusSquare size={13} style={{ display: 'inline', verticalAlign: 'middle' }} />.<br />
+                  3. Tap <strong>'Add'</strong>. Opens in full screen native window!
                 </div>
               </div>
             </div>

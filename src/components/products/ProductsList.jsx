@@ -10,6 +10,7 @@ import { listenWarehouses } from '../../services/warehouseService';
 import { formatCurrency } from '../../utils/formatters';
 import FilterPanel from '../common/FilterPanel';
 import FlatList from '../common/FlatList';
+import { getOutboxItems, getCachedCollection, cacheCollection } from '../../services/offlineStorage';
 
 export default function ProductsList() {
   const { companyId, companyInfo, isAdmin, currentUser, userProfile } = useAuth();
@@ -39,6 +40,28 @@ export default function ProductsList() {
 
     setLoading(true);
 
+    const loadCachedProducts = async () => {
+      try {
+        const cached = await getCachedCollection(companyId, 'products');
+        const outbox = await getOutboxItems(companyId);
+        const pending = outbox
+          .filter(i => i.actionType === 'create_product' && i.payload?.product)
+          .map(i => ({ ...i.payload.product, id: i.payload.productId || i.payload.product.id, isPendingSync: true }));
+
+        const map = new Map();
+        cached.forEach(p => map.set(p.id, p));
+        pending.forEach(p => map.set(p.id, p));
+        const merged = Array.from(map.values()).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+        if (merged.length > 0) {
+          setProducts(merged);
+          setLoading(false);
+        }
+      } catch (_) {}
+    };
+
+    loadCachedProducts();
+
     // Listen to warehouses
     const unsubWarehouses = listenWarehouses(companyId, (data) => {
       setWarehouses(data);
@@ -56,12 +79,28 @@ export default function ProductsList() {
           }
         });
       }
-      // Sort by name
-      list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-      setProducts(list);
-      setLoading(false);
+
+      getOutboxItems(companyId).then((outbox) => {
+        const pending = outbox
+          .filter(i => i.actionType === 'create_product' && i.payload?.product)
+          .map(i => ({ ...i.payload.product, id: i.payload.productId || i.payload.product.id, isPendingSync: true }));
+
+        const map = new Map();
+        list.forEach(p => map.set(p.id, p));
+        pending.forEach(p => map.set(p.id, p));
+        const merged = Array.from(map.values()).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+        cacheCollection(companyId, 'products', merged);
+        setProducts(merged);
+        setLoading(false);
+      }).catch(() => {
+        list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        setProducts(list);
+        setLoading(false);
+      });
     }, (err) => {
-      console.error('Products listener error:', err);
+      console.warn('Products listener error (offline mode):', err);
+      loadCachedProducts();
       setLoading(false);
     });
 

@@ -19,6 +19,7 @@ import FilterPanel from '../common/FilterPanel';
 import { setupCompany } from '../../services/authService';
 import { useToast } from '../../contexts/ToastContext';
 import WhatsAppButton from '../common/WhatsAppButton';
+import { getOutboxItems, getCachedCollection, cacheCollection } from '../../services/offlineStorage';
 
 export default function AdminDashboard() {
   const { companyId, companyInfo, currentUser, userProfile, isAdmin } = useAuth();
@@ -207,16 +208,70 @@ export default function AdminDashboard() {
       setChartData(chartArr);
       setTopProducts(topProds);
       setTopCustomers(topCusts);
+      setRecentActivity(latestActivities.slice(0, 10));
       setLoading(false);
     };
 
+    // Load cached collections immediately so offline users see full previous dashboard data
+    const loadCachedDashboardData = async () => {
+      try {
+        const [cOrders, cPayments, cExpenses, cPurchases, cProducts, cCustomers, outbox] = await Promise.all([
+          getCachedCollection(companyId, 'orders'),
+          getCachedCollection(companyId, 'payments'),
+          getCachedCollection(companyId, 'expenses'),
+          getCachedCollection(companyId, 'purchases'),
+          getCachedCollection(companyId, 'products'),
+          getCachedCollection(companyId, 'customers'),
+          getOutboxItems(companyId),
+        ]);
+
+        const pendingOrders = outbox
+          .filter(i => i.actionType === 'create_order' && i.payload?.order)
+          .map(i => ({ ...i.payload.order, id: i.payload.orderId || i.payload.order.id, isPendingSync: true }));
+
+        const orderMap = new Map();
+        cOrders.forEach(o => orderMap.set(o.id || o.orderNumber, o));
+        pendingOrders.forEach(o => orderMap.set(o.id || o.orderNumber, o));
+
+        if (cOrders.length > 0 || pendingOrders.length > 0) latestOrders = Array.from(orderMap.values());
+        if (cPayments.length > 0) latestPayments = cPayments;
+        if (cExpenses.length > 0) latestExpenses = cExpenses;
+        if (cPurchases.length > 0) latestPurchases = cPurchases;
+        if (cProducts.length > 0) latestProducts = cProducts;
+        if (cCustomers.length > 0) latestCustomers = cCustomers;
+
+        recalculate();
+      } catch (err) {
+        console.warn('[AdminDashboard] Cached load fallback:', err);
+      }
+    };
+
+    loadCachedDashboardData();
+
     // Orders listener
     const ordersUnsub = onValue(ref(database, `companies/${companyId}/orders`), (snap) => {
-      latestOrders = [];
+      const serverOrders = [];
       if (snap.exists()) {
-        snap.forEach(c => { latestOrders.push({ id: c.key, ...c.val() }); });
+        snap.forEach(c => { serverOrders.push({ id: c.key, ...c.val() }); });
       }
-      recalculate();
+      getOutboxItems(companyId).then((outbox) => {
+        const pending = outbox
+          .filter(i => i.actionType === 'create_order' && i.payload?.order)
+          .map(i => ({ ...i.payload.order, id: i.payload.orderId || i.payload.order.id, isPendingSync: true }));
+
+        const map = new Map();
+        serverOrders.forEach(o => map.set(o.id || o.orderNumber, o));
+        pending.forEach(o => map.set(o.id || o.orderNumber, o));
+        latestOrders = Array.from(map.values());
+        cacheCollection(companyId, 'orders', latestOrders);
+        recalculate();
+      }).catch(() => {
+        latestOrders = serverOrders;
+        recalculate();
+      });
+    }, (err) => {
+      console.warn('[AdminDashboard] Orders offline fallback:', err);
+      loadCachedDashboardData();
     });
     unsubs.push(ordersUnsub);
 
@@ -226,8 +281,9 @@ export default function AdminDashboard() {
       if (snap.exists()) {
         snap.forEach(c => { latestPayments.push({ id: c.key, ...c.val() }); });
       }
+      cacheCollection(companyId, 'payments', latestPayments);
       recalculate();
-    });
+    }, () => {});
     unsubs.push(paymentsUnsub);
 
     // Expenses listener
@@ -236,8 +292,9 @@ export default function AdminDashboard() {
       if (snap.exists()) {
         snap.forEach(c => { latestExpenses.push({ id: c.key, ...c.val() }); });
       }
+      cacheCollection(companyId, 'expenses', latestExpenses);
       recalculate();
-    });
+    }, () => {});
     unsubs.push(expensesUnsub);
 
     // Purchases listener
@@ -246,8 +303,9 @@ export default function AdminDashboard() {
       if (snap.exists()) {
         snap.forEach(c => { latestPurchases.push({ id: c.key, ...c.val() }); });
       }
+      cacheCollection(companyId, 'purchases', latestPurchases);
       recalculate();
-    });
+    }, () => {});
     unsubs.push(purchasesUnsub);
 
     // Products listener
@@ -256,8 +314,9 @@ export default function AdminDashboard() {
       if (snap.exists()) {
         snap.forEach(c => { latestProducts.push({ id: c.key, ...c.val() }); });
       }
+      cacheCollection(companyId, 'products', latestProducts);
       recalculate();
-    });
+    }, () => {});
     unsubs.push(productsUnsub);
 
     // Customers listener
@@ -266,8 +325,9 @@ export default function AdminDashboard() {
       if (snap.exists()) {
         snap.forEach(c => { latestCustomers.push({ id: c.key, ...c.val() }); });
       }
+      cacheCollection(companyId, 'customers', latestCustomers);
       recalculate();
-    });
+    }, () => {});
     unsubs.push(customersUnsub);
 
     // Activities listener
@@ -278,7 +338,7 @@ export default function AdminDashboard() {
       }
       latestActivities.sort((a, b) => b.timestamp - a.timestamp);
       setRecentActivity(latestActivities.slice(0, 10));
-    });
+    }, () => {});
     unsubs.push(activitiesUnsub);
 
     return () => unsubs.forEach(u => u());

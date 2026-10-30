@@ -1,7 +1,11 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { OfflineProvider } from './contexts/OfflineContext';
 import { ProtectedRoute, PublicRoute, AdminRoute } from './components/auth/ProtectedRoute';
+
+// Automatically choose HashRouter for Electron / file:// protocol and BrowserRouter for web
+const isFileProtocol = typeof window !== 'undefined' && (window.location.protocol === 'file:' || !!window.electronAPI);
+const Router = isFileProtocol ? HashRouter : BrowserRouter;
 
 // Layout
 import AppLayout from './components/layout/AppLayout';

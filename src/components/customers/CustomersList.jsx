@@ -9,6 +9,7 @@ import { deleteCustomer } from '../../services/customerService';
 import { formatCurrency, timeAgo } from '../../utils/formatters';
 
 import FlatList from '../common/FlatList';
+import { getOutboxItems, getCachedCollection, cacheCollection } from '../../services/offlineStorage';
 
 export default function CustomersList() {
   const { companyId, companyInfo, hasPermission, isAdmin, currentUser, userProfile } = useAuth();
@@ -28,6 +29,29 @@ export default function CustomersList() {
     if (!companyId) return;
 
     setLoading(true);
+
+    const loadCachedCustomers = async () => {
+      try {
+        const cached = await getCachedCollection(companyId, 'customers');
+        const outbox = await getOutboxItems(companyId);
+        const pending = outbox
+          .filter(i => i.actionType === 'create_customer' && i.payload?.customer)
+          .map(i => ({ ...i.payload.customer, id: i.payload.customerId || i.payload.customer.id, isPendingSync: true }));
+
+        const map = new Map();
+        cached.forEach(c => map.set(c.id, c));
+        pending.forEach(c => map.set(c.id, c));
+        const merged = Array.from(map.values()).sort((a, b) => (a.shopName || '').localeCompare(b.shopName || ''));
+
+        if (merged.length > 0) {
+          setCustomers(merged);
+          setLoading(false);
+        }
+      } catch (_) {}
+    };
+
+    loadCachedCustomers();
+
     const customersRef = ref(database, `companies/${companyId}/customers`);
 
     const unsubscribe = onValue(customersRef, (snapshot) => {
@@ -37,12 +61,28 @@ export default function CustomersList() {
           list.push({ id: child.key, ...child.val() });
         });
       }
-      // Sort by shopName alphabetically
-      list.sort((a, b) => (a.shopName || '').localeCompare(b.shopName || ''));
-      setCustomers(list);
-      setLoading(false);
+
+      getOutboxItems(companyId).then((outbox) => {
+        const pending = outbox
+          .filter(i => i.actionType === 'create_customer' && i.payload?.customer)
+          .map(i => ({ ...i.payload.customer, id: i.payload.customerId || i.payload.customer.id, isPendingSync: true }));
+
+        const map = new Map();
+        list.forEach(c => map.set(c.id, c));
+        pending.forEach(c => map.set(c.id, c));
+        const merged = Array.from(map.values()).sort((a, b) => (a.shopName || '').localeCompare(b.shopName || ''));
+
+        cacheCollection(companyId, 'customers', merged);
+        setCustomers(merged);
+        setLoading(false);
+      }).catch(() => {
+        list.sort((a, b) => (a.shopName || '').localeCompare(b.shopName || ''));
+        setCustomers(list);
+        setLoading(false);
+      });
     }, (err) => {
-      console.error('Customers listener error:', err);
+      console.warn('Customers listener error (offline mode):', err);
+      loadCachedCustomers();
       setLoading(false);
     });
 

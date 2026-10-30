@@ -32,3 +32,10 @@ dist-ssr
 brag-output/
 .agents/
 skills-lock.json
+
+# Native Builds
+dist-electron/
+android/app/build/
+android/build/
+android/.gradle/
+.gradle/

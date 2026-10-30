@@ -1,7 +1,18 @@
 {
+  "headers": [
+    {
+      "source": "/lamba.mobileconfig",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/x-apple-aspen-config"
+        }
+      ]
+    }
+  ],
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/((?!assets|downloads|lamba\\.mobileconfig|favicon|lambalogo|manifest).*)",
       "destination": "/index.html"
     }
   ]

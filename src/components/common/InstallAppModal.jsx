@@ -327,18 +327,39 @@ export default function InstallAppModal({ isOpen, onClose }) {
                 background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
                 border: '1.5px solid #cbd5e1',
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
                   <div style={{ fontWeight: 800, fontSize: '14px', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    🍏 iPhone & iPad (iOS Install)
+                    🍏 iPhone & iPad (Direct iOS Install Link)
                   </div>
-                  <span style={{ padding: '2px 6px', borderRadius: '6px', backgroundColor: '#475569', color: '#ffffff', fontSize: '10px', fontWeight: 700 }}>
-                    iOS System
+                  <span style={{ padding: '2px 6px', borderRadius: '6px', backgroundColor: '#0284c7', color: '#ffffff', fontSize: '10px', fontWeight: 700 }}>
+                    Apple iOS
                   </span>
                 </div>
-                
-                <div style={{ fontSize: '11.5px', color: '#334155', lineHeight: 1.5, marginBottom: '8px' }}>
-                  <strong>Why no .APK for iPhone?</strong> Apple strictly blocks .apk files (APK is Android only). Apple's official method to install apps outside the App Store is <strong>'Add to Home Screen'</strong>:
-                </div>
+
+                {/* Direct 1-Tap MobileConfig Installer */}
+                <a
+                  href="/lamba.mobileconfig"
+                  download="lamba.mobileconfig"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    width: '100%',
+                    padding: '11px 16px',
+                    backgroundColor: '#0284c7',
+                    color: '#ffffff',
+                    fontWeight: 800,
+                    fontSize: '13px',
+                    borderRadius: '10px',
+                    textDecoration: 'none',
+                    boxShadow: '0 4px 12px 0 rgba(2, 132, 199, 0.3)',
+                    marginBottom: '10px',
+                    transition: 'all 0.2s ease',
+                  }}
+                >
+                  <Download size={16} /> 1-Tap iPhone App Installer (.mobileconfig)
+                </a>
 
                 <div style={{
                   padding: '10px 12px',
@@ -349,39 +370,18 @@ export default function InstallAppModal({ isOpen, onClose }) {
                   color: '#1e293b',
                   lineHeight: 1.6,
                 }}>
-                  <div>1. Open this website in <strong>Safari</strong> on your iPhone.</div>
-                  <div>2. Tap the <strong>Share</strong> button <Share size={12} style={{ display: 'inline', verticalAlign: 'middle' }} /> at the bottom.</div>
-                  <div>3. Scroll down and tap <strong>'Add to Home Screen'</strong> <PlusSquare size={12} style={{ display: 'inline', verticalAlign: 'middle' }} />.</div>
-                  <div>4. Tap <strong>'Add'</strong> in top right corner.</div>
+                  <div style={{ fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>How to install on iPhone:</div>
+                  <div>1. Tap <strong>1-Tap iPhone App Installer</strong> above ➔ tap <strong>'Allow'</strong> when prompted.</div>
+                  <div>2. Open your iPhone <strong>Settings</strong> app ➔ tap <strong>'Profile Downloaded'</strong> (right at the top).</div>
+                  <div>3. Tap <strong>'Install'</strong> (enter your passcode) ➔ Tap <strong>'Install'</strong>.</div>
                   <div style={{ marginTop: '4px', color: '#16a34a', fontWeight: 600 }}>
-                    ✓ Installed as a real standalone app! Opens in full-screen with zero browser bars and works 100% offline.
+                    ✓ The LAMBA app icon will instantly appear on your iPhone Home Screen!
                   </div>
                 </div>
 
-                <div style={{ marginTop: '10px' }}>
-                  <a
-                    href="https://github.com/shayanmalik1107/management-panel/releases/download/v1.0.0/LAMBA-iOS.ipa"
-                    download="LAMBA-iOS.ipa"
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '8px',
-                      width: '100%',
-                      padding: '8px 14px',
-                      backgroundColor: '#334155',
-                      color: '#ffffff',
-                      fontWeight: 700,
-                      fontSize: '12px',
-                      borderRadius: '8px',
-                      textDecoration: 'none',
-                    }}
-                  >
-                    <Download size={14} /> Download iOS Native Package (.IPA)
-                  </a>
-                  <div style={{ marginTop: '4px', fontSize: '10.5px', color: '#64748b', textAlign: 'center' }}>
-                    For Xcode / AltStore sideloading on Mac & iPhone
-                  </div>
+                {/* Safari Alternative */}
+                <div style={{ marginTop: '10px', fontSize: '11px', color: '#64748b', lineHeight: 1.5 }}>
+                  <em>Or via Safari:</em> Open this site in Safari ➔ Tap <strong>Share (⎋)</strong> ➔ Tap <strong>'Add to Home Screen' (+)</strong> ➔ Tap <strong>Add</strong>.
                 </div>
               </div>
             </div>

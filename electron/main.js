@@ -15,7 +15,7 @@ function createWindow() {
     minWidth: 1024,
     minHeight: 680,
     title: 'LAMBA Management Panel',
-    icon: path.join(__dirname, '../public/lambalogo.png'),
+    icon: path.join(__dirname, 'icon.png'),
     backgroundColor: '#0f172a',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     trafficLightPosition: { x: 16, y: 16 },

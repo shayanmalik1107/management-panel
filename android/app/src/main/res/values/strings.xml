@@ -1,7 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<resources>
-    <string name="app_name">LAMBA Management Panel</string>
-    <string name="title_activity_main">LAMBA Management Panel</string>
-    <string name="package_name">com.lamba.managementpanel</string>
-    <string name="custom_url_scheme">com.lamba.managementpanel</string>
-</resources>

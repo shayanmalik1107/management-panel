@@ -1,14 +1,13 @@
 // Navbar Component — Mobile Responsive
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Menu, Search, Bell, Plus, ChevronDown, Building, X, Sparkles, Download } from 'lucide-react';
+import { Menu, Search, Bell, Plus, ChevronDown, Building, X, Sparkles } from 'lucide-react';
 import { ref, onValue, query, orderByChild, equalTo, limitToLast, update, get } from 'firebase/database';
 import { database } from '../../firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import { timeAgo } from '../../utils/formatters';
 import MaxPlanUpgradeModal from '../common/MaxPlanUpgradeModal';
 import OfflineSyncStatus from '../common/OfflineSyncStatus';
-import InstallAppModal from '../common/InstallAppModal';
 
 export default function Navbar({ onToggleSidebar, onToggleMobile }) {
   const { userProfile, companyInfo, companyId, isAdmin, currentUser } = useAuth();
@@ -21,7 +20,6 @@ export default function Navbar({ onToggleSidebar, onToggleMobile }) {
   const [showCompanySwitcher, setShowCompanySwitcher] = useState(false);
   const [userCompanies, setUserCompanies] = useState([]);
   const [showMaxUpgradeModal, setShowMaxUpgradeModal] = useState(false);
-  const [showInstallModal, setShowInstallModal] = useState(false);
   
   const notifRef = useRef(null);
   const quickAddRef = useRef(null);
@@ -318,30 +316,6 @@ export default function Navbar({ onToggleSidebar, onToggleMobile }) {
         {/* Offline Connectivity Status Pill */}
         <OfflineSyncStatus />
 
-        {/* Install / Download App Button */}
-        <button
-          type="button"
-          className="btn btn-ghost btn-sm navbar-install-btn"
-          onClick={() => setShowInstallModal(true)}
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '5px 10px',
-            borderRadius: '9999px',
-            fontWeight: 600,
-            fontSize: '12px',
-            color: 'var(--color-text-secondary, #475569)',
-            border: '1px solid var(--color-border, #cbd5e1)',
-            backgroundColor: 'var(--color-bg-secondary, #f8fafc)',
-            cursor: 'pointer',
-          }}
-          title="Install LAMBA App for Desktop (Mac/Win) or Mobile (iOS/Android)"
-        >
-          <Download size={13} color="#0284c7" />
-          <span className="navbar-new-label">App</span>
-        </button>
-
         {/* Mobile Search Toggle */}
         <button
           className="navbar-icon-btn navbar-mobile-search-btn"
@@ -463,11 +437,6 @@ export default function Navbar({ onToggleSidebar, onToggleMobile }) {
       <MaxPlanUpgradeModal
         isOpen={showMaxUpgradeModal}
         onClose={() => setShowMaxUpgradeModal(false)}
-      />
-
-      <InstallAppModal
-        isOpen={showInstallModal}
-        onClose={() => setShowInstallModal(false)}
       />
     </header>
   );

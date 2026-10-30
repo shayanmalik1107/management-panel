@@ -12,15 +12,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   </React.StrictMode>,
 )
 
-// Register Service Worker for offline capabilities & PWA desktop/mobile installation
+// Unregister any leftover service workers from past PWA installations
 if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
-      .then((reg) => {
-        console.log('[ServiceWorker] Registered with scope:', reg.scope);
-      })
-      .catch((err) => {
-        console.warn('[ServiceWorker] Registration failed:', err);
-      });
-  });
+  navigator.serviceWorker.getRegistrations().then((registrations) => {
+    for (const registration of registrations) {
+      registration.unregister();
+    }
+  }).catch(() => {});
 }

@@ -1,8 +1,0 @@
-{
-  "appId": "com.lamba.managementpanel",
-  "appName": "LAMBA Management Panel",
-  "webDir": "dist",
-  "server": {
-    "androidScheme": "https"
-  }
-}

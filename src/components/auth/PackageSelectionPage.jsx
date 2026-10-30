@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import { selectUserPackage, requestPlanUpgrade, logout, calculateProratedUpgrade, schedulePlanDowngrade, cancelScheduledDowngrade } from '../../services/authService';
 import { useToast } from '../../contexts/ToastContext';
 import { Building2, CheckCircle2, ShieldCheck, Sparkles, LogOut, ArrowRight, ArrowLeft, Clock, MessageCircle, Calendar, Zap, Shield } from 'lucide-react';
@@ -9,6 +10,7 @@ import TrialOtpModal from './TrialOtpModal';
 
 export default function PackageSelectionPage() {
   const { userProfile, currentUser } = useAuth();
+  const { isDark } = useTheme();
   const navigate = useNavigate();
   const toast = useToast();
   const [loadingPlan, setLoadingPlan] = useState(null);
@@ -102,8 +104,8 @@ export default function PackageSelectionPage() {
       {/* Top Header */}
       <header className="select-company-header" style={{ borderBottom: '1px solid #e2e8f0', background: '#ffffff' }}>
         <div className="select-company-brand" style={{ display: 'flex', alignItems: 'center' }}>
-          <img src="/lamba.png" alt="LAMBA" className="lamba-logo-desktop" style={{ height: '36px', maxWidth: '160px', objectFit: 'contain' }} />
-          <img src="/lambalogo.png" alt="LAMBA" className="lamba-logo-mobile" style={{ height: '32px', maxWidth: '32px', objectFit: 'contain' }} />
+          <img src={isDark ? "/lambabgw.png" : "/lamba.png"} alt="LAMBA" className="lamba-logo-desktop" style={{ height: '36px', maxWidth: '160px', objectFit: 'contain' }} />
+          <img src={isDark ? "/lambalogow.png" : "/lambalogo.png"} alt="LAMBA" className="lamba-logo-mobile" style={{ height: '32px', maxWidth: '32px', objectFit: 'contain' }} />
         </div>
 
         <div className="select-company-user" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>

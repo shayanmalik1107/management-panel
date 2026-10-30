@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { ref, onValue, get } from 'firebase/database';
 import { database } from '../../firebase';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import { useToast } from '../../contexts/ToastContext';
 import { createCustomer, deleteCustomer } from '../../services/customerService';
 import { createProduct, deleteProduct } from '../../services/productService';
@@ -25,6 +26,7 @@ const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY || (typeof window !== 'un
 
 export default function LambaVoiceAssistant() {
   const { companyId, companyInfo, currentUser, userProfile, isAdmin } = useAuth();
+  const { isDark } = useTheme();
   const toast = useToast();
 
   const [isOpen, setIsOpen] = useState(false);
@@ -1243,7 +1245,7 @@ STRICT MANDATORY RULES:
           >
             <span className="lamba-ai-status-dot" />
             <div className="lamba-ai-logo-badge">
-              <img src="/lambalogo.png" alt="LAMBA AI" className="lamba-ai-trigger-logo" />
+              <img src={isDark ? "/lambalogow.png" : "/lambalogo.png"} alt="LAMBA AI" className="lamba-ai-trigger-logo" />
             </div>
             <span className="lamba-ai-trigger-text">Ask LAMBA AI</span>
             <Mic size={16} className="lamba-ai-trigger-mic" />
@@ -1294,7 +1296,7 @@ STRICT MANDATORY RULES:
                 padding: 4,
                 flexShrink: 0,
               }}>
-                <img src="/lambalogo.png" alt="LAMBA AI" style={{ width: 26, height: 26, objectFit: 'contain' }} />
+                <img src={isDark ? "/lambalogow.png" : "/lambalogo.png"} alt="LAMBA AI" style={{ width: 26, height: 26, objectFit: 'contain' }} />
               </div>
               <div>
                 <div style={{ fontSize: 15, fontWeight: 800 }}>

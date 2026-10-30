@@ -5,8 +5,10 @@ import { Building2, Mail, Lock, Eye, EyeOff } from 'lucide-react';
 import { loginWithEmail, loginWithGoogle, getUserProfile, handleGoogleRedirectResult, ensureAdminProfile } from '../../services/authService';
 import { getAuthErrorMessage } from '../../utils/validators';
 import { useToast } from '../../contexts/ToastContext';
+import { useTheme } from '../../contexts/ThemeContext';
 
 export default function LoginPage() {
+  const { isDark } = useTheme();
   const navigate = useNavigate();
   const toast = useToast();
   const [email, setEmail] = useState('');
@@ -150,8 +152,8 @@ export default function LoginPage() {
       <div className="auth-container">
         <div className="auth-card">
           <div className="auth-logo" style={{ textAlign: 'center', marginBottom: 20 }}>
-            <img src="/lamba.png" alt="LAMBA" className="lamba-logo-desktop" style={{ maxHeight: '70px', margin: '0 auto', objectFit: 'contain' }} />
-            <img src="/lambalogo.png" alt="LAMBA" className="lamba-logo-mobile" style={{ maxHeight: '55px', margin: '0 auto', objectFit: 'contain' }} />
+            <img src={isDark ? "/lambabgw.png" : "/lamba.png"} alt="LAMBA" className="lamba-logo-desktop" style={{ maxHeight: '70px', margin: '0 auto', objectFit: 'contain' }} />
+            <img src={isDark ? "/lambalogow.png" : "/lambalogo.png"} alt="LAMBA" className="lamba-logo-mobile" style={{ maxHeight: '55px', margin: '0 auto', objectFit: 'contain' }} />
           </div>
 
           <h2 className="auth-title">Welcome back</h2>

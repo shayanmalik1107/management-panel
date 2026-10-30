@@ -5,8 +5,10 @@ import { Building2, Users, Mail, Lock, Eye, EyeOff, User, Phone, KeyRound, Brief
 import { registerAdmin, registerEmployee, handleGoogleRedirectResult } from '../../services/authService';
 import { getAuthErrorMessage, validateEmail, validatePassword, validateRequired, validateAdminCode } from '../../utils/validators';
 import { useToast } from '../../contexts/ToastContext';
+import { useTheme } from '../../contexts/ThemeContext';
 
 export default function RegisterPage() {
+  const { isDark } = useTheme();
   const navigate = useNavigate();
   const toast = useToast();
   const [accountType, setAccountType] = useState('');
@@ -131,8 +133,8 @@ export default function RegisterPage() {
       <div className="auth-container">
         <div className="auth-card">
           <div className="auth-logo" style={{ textAlign: 'center', marginBottom: 20 }}>
-            <img src="/lamba.png" alt="LAMBA" className="lamba-logo-desktop" style={{ maxHeight: '70px', margin: '0 auto', objectFit: 'contain' }} />
-            <img src="/lambalogo.png" alt="LAMBA" className="lamba-logo-mobile" style={{ maxHeight: '55px', margin: '0 auto', objectFit: 'contain' }} />
+            <img src={isDark ? "/lambabgw.png" : "/lamba.png"} alt="LAMBA" className="lamba-logo-desktop" style={{ maxHeight: '70px', margin: '0 auto', objectFit: 'contain' }} />
+            <img src={isDark ? "/lambalogow.png" : "/lambalogo.png"} alt="LAMBA" className="lamba-logo-mobile" style={{ maxHeight: '55px', margin: '0 auto', objectFit: 'contain' }} />
           </div>
 
           <h2 className="auth-title">Create your account</h2>

@@ -20,12 +20,14 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import { logout } from '../../services/authService';
 import { useToast } from '../../contexts/ToastContext';
 import WhatsAppButton from '../common/WhatsAppButton';
 
 export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }) {
   const { userProfile, companyInfo, isAdmin, currentUser } = useAuth();
+  const { isDark } = useTheme();
   const navigate = useNavigate();
   const toast = useToast();
 
@@ -99,11 +101,11 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
             title={collapsed ? 'Expand LAMBA sidebar' : 'LAMBA'}
           >
             {collapsed ? (
-              <img src="/lambalogo.png" alt="LAMBA" style={{ height: '36px', maxWidth: '36px', objectFit: 'contain' }} />
+              <img src={isDark ? "/lambalogow.png" : "/lambalogo.png"} alt="LAMBA" style={{ height: '36px', maxWidth: '36px', objectFit: 'contain' }} />
             ) : (
               <>
-                <img src="/lamba.png" alt="LAMBA" className="lamba-logo-desktop" style={{ height: '38px', maxWidth: '160px', objectFit: 'contain' }} />
-                <img src="/lambalogo.png" alt="LAMBA" className="lamba-logo-mobile" style={{ height: '34px', maxWidth: '34px', objectFit: 'contain' }} />
+                <img src={isDark ? "/lambabgw.png" : "/lamba.png"} alt="LAMBA" className="lamba-logo-desktop" style={{ height: '38px', maxWidth: '160px', objectFit: 'contain' }} />
+                <img src={isDark ? "/lambalogow.png" : "/lambalogo.png"} alt="LAMBA" className="lamba-logo-mobile" style={{ height: '34px', maxWidth: '34px', objectFit: 'contain' }} />
               </>
             )}
           </div>

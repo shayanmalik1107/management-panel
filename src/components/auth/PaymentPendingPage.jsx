@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ref, onValue, update } from 'firebase/database';
 import { database } from '../../firebase';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import { logout } from '../../services/authService';
 import { useToast } from '../../contexts/ToastContext';
 import {
@@ -12,6 +13,7 @@ import {
 
 export default function PaymentPendingPage() {
   const { userProfile, currentUser } = useAuth();
+  const { isDark } = useTheme();
   const navigate = useNavigate();
   const toast = useToast();
 
@@ -175,8 +177,8 @@ export default function PaymentPendingPage() {
       {/* Header */}
       <header className="select-company-header" style={{ borderBottom: '1px solid #e2e8f0', background: '#ffffff' }}>
         <div className="select-company-brand" style={{ display: 'flex', alignItems: 'center' }}>
-          <img src="/lamba.png" alt="LAMBA" className="lamba-logo-desktop" style={{ height: '36px', maxWidth: '160px', objectFit: 'contain' }} />
-          <img src="/lambalogo.png" alt="LAMBA" className="lamba-logo-mobile" style={{ height: '32px', maxWidth: '32px', objectFit: 'contain' }} />
+          <img src={isDark ? "/lambabgw.png" : "/lamba.png"} alt="LAMBA" className="lamba-logo-desktop" style={{ height: '36px', maxWidth: '160px', objectFit: 'contain' }} />
+          <img src={isDark ? "/lambalogow.png" : "/lambalogo.png"} alt="LAMBA" className="lamba-logo-mobile" style={{ height: '32px', maxWidth: '32px', objectFit: 'contain' }} />
         </div>
 
         <div className="select-company-user" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>

@@ -1,6 +1,8 @@
 import { MessageCircle, Building2, Sparkles, X, PhoneCall } from 'lucide-react';
+import { useTheme } from '../../contexts/ThemeContext';
 
 export default function MaxPlanUpgradeModal({ isOpen, onClose }) {
+  const { isDark } = useTheme();
   if (!isOpen) return null;
 
   const whatsappNumber = '923104824942';
@@ -22,15 +24,15 @@ export default function MaxPlanUpgradeModal({ isOpen, onClose }) {
       padding: 20,
     }}>
       <div style={{
-        background: '#ffffff',
+        background: isDark ? '#111827' : '#ffffff',
         borderRadius: 24,
         padding: 32,
         maxWidth: 480,
         width: '100%',
-        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+        boxShadow: isDark ? '0 25px 50px -12px rgba(0, 0, 0, 0.6)' : '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
         position: 'relative',
         textAlign: 'center',
-        border: '1px solid #e2e8f0',
+        border: isDark ? '1px solid #1f293d' : '1px solid #e2e8f0',
       }}>
         {/* Close Button */}
         <button
@@ -39,7 +41,7 @@ export default function MaxPlanUpgradeModal({ isOpen, onClose }) {
             position: 'absolute',
             top: 18,
             right: 18,
-            background: '#f1f5f9',
+            background: isDark ? '#1f293d' : '#f1f5f9',
             border: 'none',
             borderRadius: '50%',
             width: 34,
@@ -48,7 +50,7 @@ export default function MaxPlanUpgradeModal({ isOpen, onClose }) {
             alignItems: 'center',
             justifyContent: 'center',
             cursor: 'pointer',
-            color: '#64748b',
+            color: isDark ? '#94a3b8' : '#64748b',
           }}
         >
           <X size={18} />
@@ -59,7 +61,7 @@ export default function MaxPlanUpgradeModal({ isOpen, onClose }) {
           width: 70,
           height: 70,
           borderRadius: '50%',
-          background: 'linear-gradient(135deg, #25d366 0%, #128c7e 100%)',
+          background: '#25D366',
           color: '#ffffff',
           display: 'flex',
           alignItems: 'center',
@@ -77,9 +79,9 @@ export default function MaxPlanUpgradeModal({ isOpen, onClose }) {
           gap: 6,
           padding: '4px 14px',
           borderRadius: 20,
-          background: '#f0fdf4',
-          border: '1px solid #bbf7d0',
-          color: '#166534',
+          background: isDark ? 'rgba(34, 197, 94, 0.15)' : '#f0fdf4',
+          border: isDark ? '1px solid rgba(34, 197, 94, 0.3)' : '1px solid #bbf7d0',
+          color: isDark ? '#86efac' : '#166534',
           fontSize: 12,
           fontWeight: 800,
           marginBottom: 12,
@@ -87,27 +89,27 @@ export default function MaxPlanUpgradeModal({ isOpen, onClose }) {
           <Sparkles size={13} /> PRO PACKAGE LIMIT REACHED
         </div>
 
-        <h2 style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', margin: '0 0 10px 0', letterSpacing: '-0.5px' }}>
+        <h2 style={{ fontSize: 24, fontWeight: 800, color: isDark ? '#ffffff' : '#0f172a', margin: '0 0 10px 0', letterSpacing: '-0.5px' }}>
           Need More Company Slots?
         </h2>
 
-        <p style={{ fontSize: 14, color: '#64748b', lineHeight: 1.6, margin: '0 0 24px 0' }}>
+        <p style={{ fontSize: 14, color: isDark ? '#94a3b8' : '#64748b', lineHeight: 1.6, margin: '0 0 24px 0' }}>
           You have reached the maximum company slots included in your plan. To add more company slots or customize your subscription, please contact our team on WhatsApp for further upgrades & charges!
         </p>
 
         {/* Contact Info Box */}
         <div style={{
-          background: '#f8fafc',
-          border: '1px solid #e2e8f0',
+          background: isDark ? '#161f30' : '#f8fafc',
+          border: isDark ? '1px solid #1f293d' : '1px solid #e2e8f0',
           borderRadius: 14,
           padding: 16,
           marginBottom: 24,
           fontSize: 13,
-          color: '#334155',
+          color: isDark ? '#cbd5e1' : '#334155',
           textAlign: 'left',
         }}>
-          <div style={{ fontWeight: 700, color: '#0f172a', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <PhoneCall size={15} color="#25d366" /> Official Upgrade Help Desk:
+          <div style={{ fontWeight: 700, color: isDark ? '#ffffff' : '#0f172a', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <PhoneCall size={15} color="#25D366" /> Official Upgrade Help Desk:
           </div>
           <div style={{ margin: '3px 0' }}>• WhatsApp Support: <strong>03104824942</strong></div>
           <div style={{ margin: '3px 0' }}>• Account Title: <strong>Shayan Malik</strong></div>
@@ -125,7 +127,7 @@ export default function MaxPlanUpgradeModal({ isOpen, onClose }) {
               width: '100%',
               padding: '14px 20px',
               borderRadius: 12,
-              background: 'linear-gradient(135deg, #25d366 0%, #128c7e 100%)',
+              background: '#25D366',
               color: '#ffffff',
               fontSize: 15,
               fontWeight: 800,
@@ -148,8 +150,8 @@ export default function MaxPlanUpgradeModal({ isOpen, onClose }) {
               padding: '12px 20px',
               borderRadius: 12,
               background: 'transparent',
-              border: '1px solid #cbd5e1',
-              color: '#475569',
+              border: isDark ? '1px solid #334155' : '1px solid #cbd5e1',
+              color: isDark ? '#cbd5e1' : '#475569',
               fontSize: 14,
               fontWeight: 700,
               cursor: 'pointer',
@@ -162,3 +164,4 @@ export default function MaxPlanUpgradeModal({ isOpen, onClose }) {
     </div>
   );
 }
+

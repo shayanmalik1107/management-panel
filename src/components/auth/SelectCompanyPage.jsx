@@ -7,10 +7,12 @@ import { useAuth } from '../../contexts/AuthContext';
 import { logout } from '../../services/authService';
 import { Building2, Plus, ArrowRight, CheckCircle2, Users, LogOut, ShieldCheck, Search, Briefcase, XCircle, Clock } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import MaxPlanUpgradeModal from '../common/MaxPlanUpgradeModal';
 
 export default function SelectCompanyPage() {
   const { userProfile, companyId, currentUser } = useAuth();
+  const { isDark } = useTheme();
   const navigate = useNavigate();
   const toast = useToast();
 
@@ -118,8 +120,8 @@ export default function SelectCompanyPage() {
       {/* Header Bar */}
       <header className="select-company-header">
         <div className="select-company-brand" style={{ display: 'flex', alignItems: 'center' }}>
-          <img src="/lamba.png" alt="LAMBA" className="lamba-logo-desktop" style={{ height: '36px', maxWidth: '160px', objectFit: 'contain' }} />
-          <img src="/lambalogo.png" alt="LAMBA" className="lamba-logo-mobile" style={{ height: '32px', maxWidth: '32px', objectFit: 'contain' }} />
+          <img src={isDark ? "/lambabgw.png" : "/lamba.png"} alt="LAMBA" className="lamba-logo-desktop" style={{ height: '36px', maxWidth: '160px', objectFit: 'contain' }} />
+          <img src={isDark ? "/lambalogow.png" : "/lambalogo.png"} alt="LAMBA" className="lamba-logo-mobile" style={{ height: '32px', maxWidth: '32px', objectFit: 'contain' }} />
         </div>
 
         <div className="select-company-user">

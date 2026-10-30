@@ -1,16 +1,18 @@
 // Navbar Component — Mobile Responsive
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Menu, Search, Bell, Plus, ChevronDown, Building, X, Sparkles } from 'lucide-react';
+import { Menu, Search, Bell, Plus, ChevronDown, Building, X, Sparkles, Sun, Moon } from 'lucide-react';
 import { ref, onValue, query, orderByChild, equalTo, limitToLast, update, get } from 'firebase/database';
 import { database } from '../../firebase';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import { timeAgo } from '../../utils/formatters';
 import MaxPlanUpgradeModal from '../common/MaxPlanUpgradeModal';
 import OfflineSyncStatus from '../common/OfflineSyncStatus';
 
 export default function Navbar({ onToggleSidebar, onToggleMobile }) {
   const { userProfile, companyInfo, companyId, isAdmin, currentUser } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
@@ -316,6 +318,27 @@ export default function Navbar({ onToggleSidebar, onToggleMobile }) {
         {/* Offline Connectivity Status Pill */}
         <OfflineSyncStatus />
 
+        {/* Night / Day Theme Toggle */}
+        <button
+          type="button"
+          onClick={toggleTheme}
+          className={`theme-toggle-btn ${theme === 'dark' ? 'active-dark' : 'active-light'}`}
+          title={theme === 'dark' ? 'Switch to Day mode' : 'Switch to Night mode'}
+          aria-label={theme === 'dark' ? 'Switch to Day mode' : 'Switch to Night mode'}
+        >
+          {theme === 'dark' ? (
+            <>
+              <Sun size={14} className="theme-toggle-icon sun-icon" />
+              <span className="theme-toggle-text">Day</span>
+            </>
+          ) : (
+            <>
+              <Moon size={14} className="theme-toggle-icon moon-icon" />
+              <span className="theme-toggle-text">Night</span>
+            </>
+          )}
+        </button>
+
         {/* Mobile Search Toggle */}
         <button
           className="navbar-icon-btn navbar-mobile-search-btn"
@@ -403,7 +426,7 @@ export default function Navbar({ onToggleSidebar, onToggleMobile }) {
         </div>
 
         {/* User Avatar */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', paddingLeft: '10px', borderLeft: '1px solid var(--gray-200)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', paddingLeft: '10px', borderLeft: '1px solid var(--border-color)' }}>
           <div className="navbar-avatar" title={userName}>
             {userInitials}
           </div>

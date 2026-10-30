@@ -1253,23 +1253,24 @@ STRICT MANDATORY RULES:
 
       {/* Slide-Up Voice Assistant Panel */}
       {isOpen && (
-        <div style={{
-          position: 'fixed',
-          bottom: 24,
-          right: 24,
-          width: 450,
-          maxWidth: 'calc(100vw - 32px)',
-          height: 640,
-          maxHeight: 'calc(100vh - 48px)',
-          background: '#ffffff',
-          borderRadius: 24,
-          boxShadow: '0 20px 60px rgba(15, 23, 42, 0.25), 0 0 0 1px rgba(0,0,0,0.06)',
-          zIndex: 10000,
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-          animation: 'slideUp 0.25s ease-out',
-        }}>
+        <div
+          className="lamba-ai-panel"
+          style={{
+            position: 'fixed',
+            bottom: 24,
+            right: 24,
+            width: 450,
+            maxWidth: 'calc(100vw - 32px)',
+            height: 640,
+            maxHeight: 'calc(100vh - 48px)',
+            borderRadius: 24,
+            zIndex: 10000,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            animation: 'slideUp 0.25s ease-out',
+          }}
+        >
           {/* Header */}
           <div style={{
             background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 60%, #4338ca 100%)',
@@ -1433,9 +1434,7 @@ STRICT MANDATORY RULES:
           )}
 
           {/* Quick Action Chips Bar (Role-Based) */}
-          <div style={{
-            background: '#f8fafc',
-            borderBottom: '1px solid #e2e8f0',
+          <div className="lamba-ai-chips-bar" style={{
             padding: '8px 14px',
             display: 'flex',
             gap: 6,
@@ -1455,14 +1454,12 @@ STRICT MANDATORY RULES:
                 key={idx}
                 disabled={loading}
                 onClick={() => handleSendMessage(chip.q)}
+                className="lamba-ai-chip-btn"
                 style={{
-                  background: '#ffffff',
-                  border: '1px solid #cbd5e1',
                   borderRadius: 16,
                   padding: '4px 10px',
                   fontSize: 11,
                   fontWeight: 700,
-                  color: '#334155',
                   cursor: 'pointer',
                   flexShrink: 0,
                   transition: 'all 0.15s ease',
@@ -1479,16 +1476,15 @@ STRICT MANDATORY RULES:
                 key={idx}
                 disabled={loading}
                 onClick={() => handleSendMessage(chip.q)}
+                className="lamba-ai-chip-btn"
                 style={{
-                  background: '#ffffff',
-                  border: '1px solid #cbd5e1',
                   borderRadius: 16,
                   padding: '4px 10px',
                   fontSize: 11,
                   fontWeight: 700,
-                  color: '#334155',
                   cursor: 'pointer',
                   flexShrink: 0,
+                  transition: 'all 0.15s ease',
                 }}
               >
                 {chip.label}
@@ -1497,14 +1493,13 @@ STRICT MANDATORY RULES:
           </div>
 
           {/* Message List */}
-          <div style={{
+          <div className="lamba-ai-messages-area" style={{
             flex: 1,
             overflowY: 'auto',
             padding: '16px',
             display: 'flex',
             flexDirection: 'column',
             gap: 14,
-            background: '#f8fafc',
           }}>
             {messages.map((m, i) => {
               const isUser = m.role === 'user';
@@ -1517,19 +1512,18 @@ STRICT MANDATORY RULES:
                     alignItems: isUser ? 'flex-end' : 'flex-start',
                   }}
                 >
-                  <div style={{
-                    maxWidth: '88%',
-                    padding: '12px 16px',
-                    borderRadius: 16,
-                    fontSize: 13,
-                    lineHeight: 1.5,
-                    background: isUser ? '#2563eb' : '#ffffff',
-                    color: isUser ? '#ffffff' : '#0f172a',
-                    border: isUser ? 'none' : '1px solid #e2e8f0',
-                    boxShadow: isUser ? '0 4px 12px rgba(37, 99, 235, 0.25)' : '0 2px 6px rgba(0,0,0,0.04)',
-                    borderBottomRightRadius: isUser ? 4 : 16,
-                    borderBottomLeftRadius: !isUser ? 4 : 16,
-                  }}>
+                  <div
+                    className={isUser ? 'lamba-ai-bubble-user' : 'lamba-ai-bubble-assistant'}
+                    style={{
+                      maxWidth: '88%',
+                      padding: '12px 16px',
+                      borderRadius: 16,
+                      fontSize: 13,
+                      lineHeight: 1.5,
+                      borderBottomRightRadius: isUser ? 4 : 16,
+                      borderBottomLeftRadius: !isUser ? 4 : 16,
+                    }}
+                  >
                     {!isUser && isSpeaking && i === messages.length - 1 && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#7c3aed', fontSize: 11, fontWeight: 800, marginBottom: 6 }}>
                         <Volume2 size={13} /> Speaking in English...
@@ -1748,15 +1742,13 @@ STRICT MANDATORY RULES:
           )}
 
           {/* Bottom Input Area */}
-          <div style={{
+          <div className="lamba-ai-bottom-bar" style={{
             padding: '12px 14px',
-            background: '#ffffff',
-            borderTop: '1px solid #e2e8f0',
             display: 'flex',
             alignItems: 'center',
             gap: 8,
           }}>
-            {/* Big Mic Button */}
+            {/* Big Mic Button - Solid Color No Gradient */}
             <button
               onClick={toggleListening}
               title={isListening ? "Stop Listening" : "Speak to AI"}
@@ -1765,9 +1757,7 @@ STRICT MANDATORY RULES:
                 height: 44,
                 borderRadius: '50%',
                 border: 'none',
-                background: isListening
-                  ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)'
-                  : 'linear-gradient(135deg, #7c3aed 0%, #6366f1 100%)',
+                background: isListening ? '#ef4444' : '#7c3aed',
                 color: '#ffffff',
                 cursor: 'pointer',
                 display: 'flex',
@@ -1793,14 +1783,13 @@ STRICT MANDATORY RULES:
               onKeyDown={(e) => {
                 if (e.key === 'Enter') handleSendMessage();
               }}
+              className="lamba-ai-input-field"
               style={{
                 flex: 1,
                 padding: '12px 16px',
                 borderRadius: 24,
-                border: '1px solid #cbd5e1',
                 fontSize: 13,
                 outline: 'none',
-                background: '#f8fafc',
               }}
             />
 

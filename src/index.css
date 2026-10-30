@@ -3276,7 +3276,7 @@ h4 { font-size: var(--font-size-lg); }
 }
 
 .lamba-ai-trigger-btn {
-  background: linear-gradient(135deg, #7c3aed 0%, #2563eb 50%, #06b6d4 100%);
+  background: #7c3aed;
   color: #ffffff;
   border: none;
   border-radius: 30px;
@@ -3287,7 +3287,7 @@ h4 { font-size: var(--font-size-lg); }
   font-size: 14px;
   font-weight: 800;
   cursor: pointer;
-  box-shadow: 0 8px 25px rgba(124, 58, 237, 0.45);
+  box-shadow: 0 8px 25px rgba(124, 58, 237, 0.4);
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   user-select: none;
@@ -3387,7 +3387,527 @@ h4 { font-size: var(--font-size-lg); }
   }
 }
 
+/* ============================================================
+   THEME TOGGLE BUTTON (HEADER NEXT TO ONLINE STATUS)
+   ============================================================ */
+.theme-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+  border: 1px solid var(--border-color);
+  background: var(--gray-50);
+  color: var(--gray-700);
+  box-shadow: var(--shadow-xs);
+}
 
+.theme-toggle-btn:hover {
+  background: var(--gray-100);
+  color: var(--gray-900);
+  border-color: var(--gray-300);
+  transform: translateY(-1px);
+}
 
+.theme-toggle-btn:active {
+  transform: translateY(0);
+}
 
+.theme-toggle-icon {
+  flex-shrink: 0;
+  transition: transform 0.25s ease;
+}
 
+.theme-toggle-btn:hover .theme-toggle-icon {
+  transform: rotate(18deg) scale(1.15);
+}
+
+.theme-toggle-btn.active-light .moon-icon {
+  color: #6366f1;
+}
+
+.theme-toggle-btn.active-dark .sun-icon {
+  color: #fbbf24;
+}
+
+.theme-toggle-text {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* ============================================================
+   AI VOICE ASSISTANT LIGHT MODE DEFAULTS
+   ============================================================ */
+.lamba-ai-panel {
+  background-color: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+
+.lamba-ai-chips-bar {
+  background-color: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.lamba-ai-chip-btn {
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+}
+
+.lamba-ai-chip-btn:hover {
+  background-color: #f1f5f9;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.lamba-ai-messages-area {
+  background-color: #f8fafc;
+}
+
+.lamba-ai-bubble-assistant {
+  background-color: #ffffff;
+  color: #0f172a;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+.lamba-ai-bubble-user {
+  background-color: #2563eb;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+}
+
+.lamba-ai-bottom-bar {
+  background-color: #ffffff;
+  border-top: 1px solid #e2e8f0;
+}
+
+.lamba-ai-input-field {
+  background-color: #f8fafc;
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
+}
+
+.lamba-ai-input-field:focus {
+  border-color: #7c3aed;
+  background-color: #ffffff;
+}
+
+/* ============================================================
+   NIGHT / DARK MODE COMPLETE DESIGN SYSTEM
+   Deep obsidian & midnight slate high-contrast palette
+   ============================================================ */
+[data-theme="dark"],
+html.dark,
+body.dark {
+  /* Inverted Gray Scale */
+  --gray-25: #111827;
+  --gray-50: #0b0f19;
+  --gray-100: #161f30;
+  --gray-200: #222d42;
+  --gray-300: #334155;
+  --gray-400: #64748b;
+  --gray-500: #94a3b8;
+  --gray-600: #cbd5e1;
+  --gray-700: #e2e8f0;
+  --gray-800: #f1f5f9;
+  --gray-900: #ffffff;
+
+  /* Primary Accent Adjustments */
+  --primary-50: #1e1b4b;
+  --primary-100: #2e287a;
+  --primary-200: #3730a3;
+  --primary-300: #4f46e5;
+  --primary-400: #6366f1;
+  --primary-500: #818cf8;
+  --primary-600: #6366f1;
+  --primary-700: #a5b4fc;
+  --primary-800: #c7d2fe;
+  --primary-900: #e0e7ff;
+
+  /* Semantic Highlights */
+  --success-50: #064e3b;
+  --success-100: #065f46;
+  --warning-50: #78350f;
+  --warning-100: #92400e;
+  --danger-50: #7f1d1d;
+  --danger-100: #991b1b;
+  --info-50: #1e3a8a;
+  --info-100: #1e40af;
+
+  /* Borders & Shadows */
+  --border-color: #1f293d;
+  --border: 1px solid var(--border-color);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 2px 5px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 10px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 12px 25px rgba(0, 0, 0, 0.65);
+  --shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.75);
+}
+
+/* Base Body and Backgrounds */
+[data-theme="dark"] body {
+  background-color: #0b0f19;
+  color: #f1f5f9;
+}
+
+[data-theme="dark"] h1,
+[data-theme="dark"] h2,
+[data-theme="dark"] h3,
+[data-theme="dark"] h4,
+[data-theme="dark"] h5,
+[data-theme="dark"] h6 {
+  color: #ffffff;
+}
+
+/* Dark Side Panel / Sidebar */
+[data-theme="dark"] .sidebar {
+  background-color: #111827;
+  border-right-color: #1f293d;
+}
+
+[data-theme="dark"] .sidebar-header,
+[data-theme="dark"] .sidebar-footer {
+  border-color: #1f293d;
+}
+
+[data-theme="dark"] .sidebar-brand-name {
+  color: #ffffff;
+}
+
+[data-theme="dark"] .sidebar-brand-sub {
+  color: #64748b;
+}
+
+[data-theme="dark"] .sidebar-section-label {
+  color: #475569;
+}
+
+[data-theme="dark"] .sidebar-link {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .sidebar-link:hover {
+  background: #1e293b;
+  color: #ffffff;
+}
+
+[data-theme="dark"] .sidebar-link.active {
+  background: rgba(99, 102, 241, 0.16);
+  color: #818cf8;
+}
+
+[data-theme="dark"] .sidebar-link.active .link-icon {
+  color: #818cf8;
+}
+
+[data-theme="dark"] .sidebar-user:hover {
+  background: #1e293b;
+}
+
+[data-theme="dark"] .sidebar-user-name {
+  color: #ffffff;
+}
+
+[data-theme="dark"] .sidebar-user-avatar {
+  background: #1e1b4b;
+  color: #818cf8;
+}
+
+/* Dark Header / Navbar */
+[data-theme="dark"] .navbar {
+  background-color: #111827;
+  border-bottom-color: #1f293d;
+}
+
+[data-theme="dark"] .navbar-title {
+  color: #ffffff;
+}
+
+[data-theme="dark"] .navbar-search input {
+  background-color: #161f30;
+  border-color: #2e384d;
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .navbar-search input:focus {
+  background-color: #1a253a;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+}
+
+[data-theme="dark"] .navbar-search .search-icon {
+  color: #64748b;
+}
+
+[data-theme="dark"] .navbar-icon-btn {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .navbar-icon-btn:hover {
+  background: #1e293b;
+  color: #ffffff;
+}
+
+[data-theme="dark"] .theme-toggle-btn {
+  background: #161f30;
+  border-color: #2e384d;
+  color: #f1f5f9;
+}
+
+[data-theme="dark"] .theme-toggle-btn:hover {
+  background: #1e293b;
+  border-color: #475569;
+  color: #ffffff;
+}
+
+/* Dark Dropdowns, Notifications & Switcher */
+[data-theme="dark"] .dropdown-menu {
+  background-color: #111827;
+  border-color: #1f293d;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.75);
+}
+
+[data-theme="dark"] .dropdown-item {
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .dropdown-item:hover {
+  background-color: #1e293b;
+  color: #ffffff;
+}
+
+[data-theme="dark"] .dropdown-divider {
+  background-color: #1f293d;
+}
+
+[data-theme="dark"] .notification-panel {
+  background-color: #111827;
+  border-color: #1f293d;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.75);
+}
+
+[data-theme="dark"] .notification-panel-header {
+  border-bottom-color: #1f293d;
+}
+
+[data-theme="dark"] .notification-item {
+  border-bottom-color: #1f293d;
+}
+
+[data-theme="dark"] .notification-item:hover {
+  background-color: #161f30;
+}
+
+[data-theme="dark"] .notification-item.unread {
+  background-color: rgba(99, 102, 241, 0.1);
+}
+
+[data-theme="dark"] .notification-message {
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .notification-time {
+  color: #64748b;
+}
+
+/* Dark Cards & Stats */
+[data-theme="dark"] .card {
+  background-color: #111827;
+  border-color: #1f293d;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+
+[data-theme="dark"] .card-header,
+[data-theme="dark"] .card-footer {
+  border-color: #1f293d;
+}
+
+[data-theme="dark"] .stat-card {
+  background-color: #111827;
+  border-color: #1f293d;
+}
+
+[data-theme="dark"] .flat-list-container {
+  background-color: #111827;
+  border-color: #1f293d;
+}
+
+/* Dark Tables */
+[data-theme="dark"] .data-table thead,
+[data-theme="dark"] .flat-list-container thead th {
+  background-color: #161f30;
+  border-bottom-color: #1f293d;
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .data-table th {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .data-table td,
+[data-theme="dark"] .flat-list-container td {
+  border-bottom-color: #1a2333;
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .data-table tbody tr:hover,
+[data-theme="dark"] .flat-list-container tbody tr:hover {
+  background-color: #161f30;
+}
+
+[data-theme="dark"] .table-cell-primary {
+  color: #ffffff;
+}
+
+[data-theme="dark"] .table-cell-secondary {
+  color: #94a3b8;
+}
+
+/* Dark Forms & Inputs */
+[data-theme="dark"] .form-label {
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .form-input,
+[data-theme="dark"] .form-select,
+[data-theme="dark"] .form-textarea {
+  background-color: #161f30;
+  border-color: #2e384d;
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .form-input:focus,
+[data-theme="dark"] .form-select:focus,
+[data-theme="dark"] .form-textarea:focus {
+  background-color: #1a253a;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+}
+
+[data-theme="dark"] .form-input::placeholder,
+[data-theme="dark"] .form-textarea::placeholder {
+  color: #64748b;
+}
+
+/* Dark Modals */
+[data-theme="dark"] .modal {
+  background-color: #111827;
+  border: 1px solid #1f293d;
+  color: #f1f5f9;
+}
+
+[data-theme="dark"] .modal-header,
+[data-theme="dark"] .modal-footer {
+  border-color: #1f293d;
+}
+
+[data-theme="dark"] .modal-close {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .modal-close:hover {
+  background-color: #1e293b;
+  color: #ffffff;
+}
+
+/* Dark Buttons */
+[data-theme="dark"] .btn-secondary,
+[data-theme="dark"] .btn-ghost {
+  background-color: #161f30;
+  border-color: #2e384d;
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .btn-secondary:hover,
+[data-theme="dark"] .btn-ghost:hover {
+  background-color: #1e293b;
+  color: #ffffff;
+}
+
+/* Dark Auth Pages */
+[data-theme="dark"] .auth-page {
+  background-color: #0b0f19;
+}
+
+[data-theme="dark"] .auth-card {
+  background-color: #111827;
+  border-color: #1f293d;
+}
+
+[data-theme="dark"] .auth-logo h1 {
+  color: #ffffff;
+}
+
+[data-theme="dark"] .account-type-card {
+  background-color: #161f30;
+  border-color: #2e384d;
+  color: #f1f5f9;
+}
+
+[data-theme="dark"] .account-type-card:hover {
+  border-color: #6366f1;
+  background-color: rgba(99, 102, 241, 0.15);
+}
+
+/* ============================================================
+   DARK AI VOICE & VISUAL ASSISTANT PANEL
+   ============================================================ */
+[data-theme="dark"] .lamba-ai-panel {
+  background-color: #111827 !important;
+  border: 1px solid #1f293d !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.06) !important;
+}
+
+[data-theme="dark"] .lamba-ai-chips-bar {
+  background-color: #161f30 !important;
+  border-bottom: 1px solid #1f293d !important;
+}
+
+[data-theme="dark"] .lamba-ai-chip-btn {
+  background-color: #1f293d !important;
+  border: 1px solid #334155 !important;
+  color: #cbd5e1 !important;
+}
+
+[data-theme="dark"] .lamba-ai-chip-btn:hover {
+  background-color: #334155 !important;
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] .lamba-ai-messages-area {
+  background-color: #0b0f19 !important;
+}
+
+[data-theme="dark"] .lamba-ai-bubble-assistant {
+  background-color: #161f30 !important;
+  color: #f1f5f9 !important;
+  border: 1px solid #1f293d !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25) !important;
+}
+
+[data-theme="dark"] .lamba-ai-bottom-bar {
+  background-color: #111827 !important;
+  border-top: 1px solid #1f293d !important;
+}
+
+[data-theme="dark"] .lamba-ai-input-field {
+  background-color: #161f30 !important;
+  border: 1px solid #2e384d !important;
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] .lamba-ai-input-field:focus {
+  background-color: #1a253a !important;
+  border-color: #7c3aed !important;
+}
+
+[data-theme="dark"] .lamba-ai-input-field::placeholder {
+  color: #64748b !important;
+}

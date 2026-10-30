@@ -1,4 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { OfflineProvider } from './contexts/OfflineContext';
 import { ProtectedRoute, PublicRoute, AdminRoute } from './components/auth/ProtectedRoute';
@@ -75,8 +76,9 @@ function DashboardRouter() {
 
 function App() {
   return (
-    <AuthProvider>
-      <OfflineProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <OfflineProvider>
         <UpgradeCelebrationModal />
         <Router>
           <Routes>
@@ -183,8 +185,9 @@ function App() {
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </Router>
-      </OfflineProvider>
-    </AuthProvider>
+        </OfflineProvider>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
 

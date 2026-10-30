@@ -1245,7 +1245,7 @@ STRICT MANDATORY RULES:
           >
             <span className="lamba-ai-status-dot" />
             <div className="lamba-ai-logo-badge">
-              <img src={isDark ? "/lambalogow.png" : "/lambalogo.png"} alt="LAMBA AI" className="lamba-ai-trigger-logo" />
+              <img src="/lambalogo.png" alt="LAMBA AI" className="lamba-ai-trigger-logo" />
             </div>
             <span className="lamba-ai-trigger-text">Ask LAMBA AI</span>
             <Mic size={16} className="lamba-ai-trigger-mic" />
@@ -1296,7 +1296,7 @@ STRICT MANDATORY RULES:
                 padding: 4,
                 flexShrink: 0,
               }}>
-                <img src={isDark ? "/lambalogow.png" : "/lambalogo.png"} alt="LAMBA AI" style={{ width: 26, height: 26, objectFit: 'contain' }} />
+                <img src="/lambalogo.png" alt="LAMBA AI" style={{ width: 26, height: 26, objectFit: 'contain' }} />
               </div>
               <div>
                 <div style={{ fontSize: 15, fontWeight: 800 }}>

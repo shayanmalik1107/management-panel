@@ -4174,3 +4174,9 @@ body.dark {
   accent-color: #6366f1;
 }
 
+/* Offline & Cloud Sync Center modal title in dark theme */
+[data-theme="dark"] .sync-center-title,
+.sync-center-title {
+  color: #0f172a !important;
+}
+

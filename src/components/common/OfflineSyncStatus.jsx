@@ -134,10 +134,10 @@ export default function OfflineSyncStatus() {
                   {!isOnline ? <WifiOff size={18} /> : <Database size={18} />}
                 </div>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700 }}>
+                  <h3 className="sync-center-title" style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>
                     Offline & Cloud Sync Center
                   </h3>
-                  <p style={{ margin: 0, fontSize: '12px', color: 'var(--color-text-muted, #64748b)' }}>
+                  <p style={{ margin: 0, fontSize: '12px', color: '#64748b' }}>
                     Unlimited local storage with real-time Firebase sync
                   </p>
                 </div>
@@ -228,7 +228,7 @@ export default function OfflineSyncStatus() {
                   justifyContent: 'space-between',
                   marginBottom: '10px' 
                 }}>
-                  <h4 style={{ margin: 0, fontSize: '13px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  <h4 style={{ margin: 0, fontSize: '13px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#0f172a' }}>
                     Outbox Queue ({pendingItems.length})
                   </h4>
                   {lastSyncTime && (

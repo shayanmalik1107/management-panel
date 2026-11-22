@@ -9,6 +9,7 @@ import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from '../../utils/constants'
 import { ShoppingCart, Plus, TrendingUp, Clock, Users, Store, CreditCard, Calendar, X } from 'lucide-react';
 import WhatsAppButton from '../common/WhatsAppButton';
 import { getOutboxItems, getCachedCollection } from '../../services/offlineStorage';
+import { onSyncStatusChange, processOutbox } from '../../services/syncEngine';
 
 export default function EmployeeDashboard() {
   const { companyId, companyInfo, userProfile, currentUser } = useAuth();
@@ -218,8 +219,16 @@ export default function EmployeeDashboard() {
       }
 
       getOutboxItems(companyId).then((outbox) => {
+        const serverIds = new Set(list.map(o => o.id));
+        const serverNumbers = new Set(list.map(o => o.orderNumber).filter(Boolean));
+
         const pending = outbox
           .filter(i => i.actionType === 'create_order' && i.payload?.order)
+          .filter(i => {
+            const orderId = i.payload.orderId || i.payload.order.id;
+            const orderNum = i.payload.orderNumber || i.payload.order.orderNumber;
+            return !serverIds.has(orderId) && !serverNumbers.has(orderNum);
+          })
           .map(i => ({ ...i.payload.order, id: i.payload.orderId || i.payload.order.id, isPendingSync: true }));
 
         const map = new Map();
@@ -262,8 +271,20 @@ export default function EmployeeDashboard() {
     });
     unsubs.push(customersUnsub);
 
+    const unsubSync = onSyncStatusChange(() => {
+      loadOfflineLocalData();
+    });
+    unsubs.push(unsubSync);
+
+    const handleOnline = () => {
+      processOutbox(companyId);
+      loadOfflineLocalData();
+    };
+    window.addEventListener('online', handleOnline);
+
     return () => {
       unsubs.forEach(unsub => unsub());
+      window.removeEventListener('online', handleOnline);
     };
   }, [companyId, currentUser?.uid, recalculate]);
 
@@ -464,11 +485,15 @@ export default function EmployeeDashboard() {
                     <td className="table-cell-mono">
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                         <span>{order.orderNumber}</span>
-                        {order.isPendingSync && (
+                        {order.isPendingSync ? (
                           <span style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '4px', background: '#fef3c7', color: '#b45309', fontWeight: 700 }}>
                             ⏳ Offline
                           </span>
-                        )}
+                        ) : (order.syncedAt || order.orderNumber?.startsWith('ORD-OFF-')) ? (
+                          <span style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '4px', background: '#dcfce7', color: '#15803d', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                            ✓ Synced
+                          </span>
+                        ) : null}
                       </div>
                     </td>
                     <td className="text-muted text-sm">{formatDate(order.createdAt)}</td>

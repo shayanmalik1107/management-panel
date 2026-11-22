@@ -12,6 +12,7 @@ import OrderReturnModal from './OrderReturnModal';
 import FilterPanel from '../common/FilterPanel';
 import FlatList from '../common/FlatList';
 import { getOutboxItems, getCachedCollection, cacheCollection } from '../../services/offlineStorage';
+import { onSyncStatusChange, processOutbox } from '../../services/syncEngine';
 
 export default function OrdersList() {
   const { companyId, companyInfo, isAdmin, currentUser, userProfile, hasPermission } = useAuth();
@@ -107,8 +108,16 @@ export default function OrdersList() {
       allOrders.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
       getOutboxItems(companyId).then((outbox) => {
+        const serverIds = new Set(allOrders.map(o => o.id));
+        const serverNumbers = new Set(allOrders.map(o => o.orderNumber).filter(Boolean));
+
         const pending = outbox
           .filter(i => i.actionType === 'create_order' && i.payload?.order)
+          .filter(i => {
+            const orderId = i.payload.orderId || i.payload.order.id;
+            const orderNum = i.payload.orderNumber || i.payload.order.orderNumber;
+            return !serverIds.has(orderId) && !serverNumbers.has(orderNum);
+          })
           .map(i => ({ ...i.payload.order, id: i.payload.orderId || i.payload.order.id, isPendingSync: true }));
 
         const map = new Map();
@@ -163,10 +172,23 @@ export default function OrdersList() {
       setProducts(allProds);
     });
 
+    // Listen to sync engine events to auto-update status without page refresh
+    const unsubSync = onSyncStatusChange((status) => {
+      loadCachedAndOutbox();
+    });
+
+    const handleOnline = () => {
+      processOutbox(companyId);
+      loadCachedAndOutbox();
+    };
+    window.addEventListener('online', handleOnline);
+
     return () => {
       unsubscribeOrders();
       unsubscribeCusts();
       unsubscribeProducts();
+      unsubSync();
+      window.removeEventListener('online', handleOnline);
     };
   }, [companyId, isAdmin, currentUser?.uid]);
 
@@ -615,11 +637,15 @@ export default function OrdersList() {
                     <td className="table-cell-mono" onClick={() => navigate(`/orders/${order.id}`)}>
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                         <span>{order.orderNumber}</span>
-                        {order.isPendingSync && (
+                        {order.isPendingSync ? (
                           <span style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '4px', background: '#fef3c7', color: '#b45309', fontWeight: 700 }}>
                             ⏳ Offline
                           </span>
-                        )}
+                        ) : (order.syncedAt || order.orderNumber?.startsWith('ORD-OFF-')) ? (
+                          <span style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '4px', background: '#dcfce7', color: '#15803d', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                            ✓ Synced
+                          </span>
+                        ) : null}
                       </div>
                     </td>
                     <td className="text-muted text-sm" onClick={() => navigate(`/orders/${order.id}`)}>{formatDate(order.createdAt)}</td>

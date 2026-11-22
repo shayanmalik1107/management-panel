@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Printer, FileText, CheckCircle, Clock, Truck, XCircle, RotateCcw } from 'lucide-react';
+import { ref, onValue } from 'firebase/database';
+import { database } from '../../firebase';
 import { getOrder, updateOrderStatus } from '../../services/orderService';
+import { onSyncStatusChange, processOutbox } from '../../services/syncEngine';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { formatCurrency, formatDate } from '../../utils/formatters';
@@ -31,16 +34,44 @@ export default function OrderDetails() {
 
   useEffect(() => {
     if (!companyId || !id) return;
-    loadOrder();
+    loadOrder(true);
+
+    // Live subscription to RTDB for when internet comes back or remote changes happen
+    const orderRef = ref(database, `companies/${companyId}/orders/${id}`);
+    const unsubRTDB = onValue(orderRef, (snap) => {
+      if (snap.exists()) {
+        setOrder({ id: snap.key, ...snap.val(), isPendingSync: false });
+        setLoading(false);
+      }
+    }, () => {});
+
+    // Live subscription to local sync engine
+    const unsubSync = onSyncStatusChange(() => {
+      loadOrder(false);
+    });
+
+    const handleOnline = () => {
+      processOutbox(companyId);
+      loadOrder(false);
+    };
+    window.addEventListener('online', handleOnline);
+
+    return () => {
+      unsubRTDB();
+      unsubSync();
+      window.removeEventListener('online', handleOnline);
+    };
   }, [companyId, id]);
 
-  const loadOrder = async () => {
-    setLoading(true);
+  const loadOrder = async (showSpinner = true) => {
+    if (showSpinner) setLoading(true);
     try {
       const data = await getOrder(companyId, id);
       if (!data) {
-        toast.error('Order not found');
-        navigate('/orders');
+        if (showSpinner) {
+          toast.error('Order not found');
+          navigate('/orders');
+        }
         return;
       }
       
@@ -53,9 +84,10 @@ export default function OrderDetails() {
       
       setOrder(data);
     } catch (err) {
-      toast.error('Failed to load order');
+      if (showSpinner) toast.error('Failed to load order');
+    } finally {
+      if (showSpinner) setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleStatusChange = async (newStatus) => {
@@ -109,6 +141,15 @@ export default function OrderDetails() {
             <span className={`badge badge-${ORDER_STATUS_COLORS[order.status] || 'gray'}`} style={{ fontSize: 'var(--font-size-sm)', padding: '4px 10px' }}>
               {ORDER_STATUS_LABELS[order.status]}
             </span>
+            {order.isPendingSync ? (
+              <span style={{ fontSize: '12px', padding: '3px 8px', borderRadius: '4px', background: '#fef3c7', color: '#b45309', fontWeight: 700 }}>
+                ⏳ Offline
+              </span>
+            ) : (order.syncedAt || order.orderNumber?.startsWith('ORD-OFF-')) ? (
+              <span style={{ fontSize: '12px', padding: '3px 8px', borderRadius: '4px', background: '#dcfce7', color: '#15803d', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                ✓ Synced
+              </span>
+            ) : null}
           </div>
           <p className="text-muted text-sm">Created on {formatDate(order.createdAt, 'long')} by {order.createdByName}</p>
         </div>

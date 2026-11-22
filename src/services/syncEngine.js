@@ -4,7 +4,7 @@
 // commit together and can safely be retried.
 import { ref, update, runTransaction } from 'firebase/database';
 import { auth, database } from '../firebase';
-import { getOutboxItems, removeOutboxItem, updateOutboxItem, getActiveCachedUserId } from './offlineStorage';
+import { getOutboxItems, removeOutboxItem, updateOutboxItem, getActiveCachedUserId, addToCachedCollection } from './offlineStorage';
 
 let isSyncRunning = false;
 const listeners = new Set();
@@ -26,7 +26,12 @@ export async function checkConnectivity() {
     const response = await fetch('/favicon.svg?sync=' + Date.now(), { method: 'HEAD', cache: 'no-store' });
     return response.ok;
   } catch (_) {
-    return false;
+    try {
+      const ping = await fetch('/favicon.svg', { method: 'GET', cache: 'no-store' });
+      return ping.ok;
+    } catch (_) {
+      return typeof navigator !== 'undefined' ? navigator.onLine : false;
+    }
   }
 }
 
@@ -45,7 +50,7 @@ export async function processOutbox(companyId) {
   let successCount = 0;
   let failCount = 0;
   try {
-    const items = (await getOutboxItems(companyId)).filter((item) => item.userId === activeUid);
+    const items = (await getOutboxItems(companyId)).filter((item) => !item.userId || !activeUid || item.userId === activeUid);
     // FIFO is important: a product/customer created locally may be referenced by
     // a later operation in the same device's queue.
     for (const item of items) {
@@ -160,7 +165,12 @@ async function applyOfflineOrder(item) {
   if (!result.committed && !result.snapshot.exists()) {
     throw new Error('Order sync was not committed. Please retry when connected.');
   }
-  if (result.committed || result.snapshot.exists()) return;
+  if (result.committed || result.snapshot.exists()) {
+    try {
+      await addToCachedCollection(companyId, 'orders', { id: orderId, ...order, isPendingSync: false, syncedAt: now });
+    } catch (_) {}
+    return;
+  }
   throw new Error('Order sync was not acknowledged by Firebase.');
 }
 
@@ -214,15 +224,25 @@ async function processSingleItem(item) {
 
 export function initAutoSync(companyId) {
   if (typeof window === 'undefined') return;
-  const handleOnline = () => { processOutbox(companyId); };
+  const triggerSync = () => {
+    processOutbox(companyId);
+    setTimeout(() => processOutbox(companyId), 1200);
+    setTimeout(() => processOutbox(companyId), 3000);
+  };
+  const handleOnline = () => { triggerSync(); };
   const handleOffline = () => notifyListeners({ isOnline: false, isSyncing: false });
   window.addEventListener('online', handleOnline);
   window.addEventListener('offline', handleOffline);
   const interval = setInterval(async () => {
-    if (navigator.onLine && (await getOutboxItems(companyId)).length) processOutbox(companyId);
-  }, 30000);
+    if (navigator.onLine) {
+      try {
+        const outbox = await getOutboxItems(companyId);
+        if (outbox.length > 0) processOutbox(companyId);
+      } catch (_) {}
+    }
+  }, 10000);
   // Try once on workspace entry too.
-  if (navigator.onLine) processOutbox(companyId);
+  if (navigator.onLine) triggerSync();
   return () => {
     window.removeEventListener('online', handleOnline);
     window.removeEventListener('offline', handleOffline);

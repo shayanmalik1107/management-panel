@@ -257,8 +257,16 @@ export default function AdminDashboard() {
         snap.forEach(c => { serverOrders.push({ id: c.key, ...c.val() }); });
       }
       getOutboxItems(companyId).then((outbox) => {
+        const serverIds = new Set(serverOrders.map(o => o.id));
+        const serverNumbers = new Set(serverOrders.map(o => o.orderNumber).filter(Boolean));
+
         const pending = outbox
           .filter(i => i.actionType === 'create_order' && i.payload?.order)
+          .filter(i => {
+            const orderId = i.payload.orderId || i.payload.order.id;
+            const orderNum = i.payload.orderNumber || i.payload.order.orderNumber;
+            return !serverIds.has(orderId) && !serverNumbers.has(orderNum);
+          })
           .map(i => ({ ...i.payload.order, id: i.payload.orderId || i.payload.order.id, isPendingSync: true }));
 
         const map = new Map();

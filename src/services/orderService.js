@@ -3,7 +3,7 @@ import { ref, get, update, runTransaction } from 'firebase/database';
 import { database } from '../firebase';
 import { generateId } from '../utils/codeGenerator';
 import { generateSequentialNumber } from '../utils/formatters';
-import { saveToOutbox, addToCachedCollection, cacheCollection, getCachedCollection, getOutboxItems } from './offlineStorage';
+import { saveToOutbox, addToCachedCollection, cacheCollection, getCachedCollection, getOutboxItems, getActiveCachedUserId, getDeviceId } from './offlineStorage';
 
 /**
  * Create a new order with stock validation and atomic updates (with seamless offline fallback)
@@ -191,13 +191,13 @@ export async function createOrderOffline(companyId, orderData, userId, userName)
     offlineCounter = Math.floor(1000 + Math.random() * 9000);
   }
 
-  const orderNumber = `ORD-OFF-${offlineCounter}`;
+  const deviceSuffix = getDeviceId().replace(/[^a-zA-Z0-9]/g, '').slice(0, 8).toUpperCase() || 'LOCAL';
+  const orderNumber = `ORD-OFF-${deviceSuffix}-${offlineCounter}`;
   const isCash = orderData.paymentType === 'cash';
   const grandTotal = Number(orderData.grandTotal) || 0;
   const amountPaid = isCash ? grandTotal : (Number(orderData.amountPaid) || 0);
 
   const itemsObj = {};
-  const stockUpdates = {};
 
   if (orderData.items) {
     orderData.items.forEach((item, index) => {
@@ -212,22 +212,8 @@ export async function createOrderOffline(companyId, orderData, userId, userName)
         lineTotal: Number(item.lineTotal),
       };
 
-      const movId = generateId('mov');
-      stockUpdates[item.productId] = {
-        quantity: Number(item.quantity),
-        movement: {
-          id: movId,
-          type: 'sale',
-          productId: item.productId,
-          productName: item.productName,
-          quantity: -Number(item.quantity),
-          referenceId: orderId,
-          referenceType: 'order',
-          referenceNumber: orderNumber,
-          createdBy: userId,
-          createdAt: Date.now(),
-        }
-      };
+      // Option B: do not decrement cached stock on the employee device.
+      // The authoritative stock deduction happens once, transactionally, on sync.
     });
   }
 
@@ -291,7 +277,6 @@ export async function createOrderOffline(companyId, orderData, userId, userName)
       orderId,
       orderNumber,
       order,
-      stockUpdates,
       customerUpdates,
       activity,
       notification
@@ -301,9 +286,7 @@ export async function createOrderOffline(companyId, orderData, userId, userName)
     description: `Order ${orderNumber} (${order.customerName || 'Shop'})`
   });
 
-  // 2. Add to local offline cache so current user immediately sees it in their orders list
-  await addToCachedCollection(companyId, 'orders', order);
-
+  // Keep pending orders in the creator's outbox, not the shared company cache.
   return { orderId, orderNumber, isOffline: true };
 }
 
@@ -590,8 +573,14 @@ export async function updateOrder(companyId, orderId, newOrderData, userId, user
 export async function getOrders(companyId) {
   // If offline, return cached orders merged with pending outbox items
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
-    const cached = await getCachedCollection(companyId, 'orders');
-    return cached.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    const cached = (await getCachedCollection(companyId, 'orders')).filter(order => !order.isPendingSync);
+    const uid = getActiveCachedUserId();
+    const pending = (await getOutboxItems(companyId))
+      .filter(item => item.userId === uid && item.actionType === 'create_order' && item.payload?.order)
+      .map(item => ({ ...item.payload.order, id: item.payload.orderId || item.payload.order.id, isPendingSync: true }));
+    const map = new Map(cached.map(order => [order.id || order.orderNumber, order]));
+    pending.forEach(order => map.set(order.id || order.orderNumber, order));
+    return Array.from(map.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   }
 
   try {
@@ -604,9 +593,10 @@ export async function getOrders(companyId) {
     }
 
     // Merge any pending outbox orders that haven't synced yet
+    const activeUid = getActiveCachedUserId();
     const pendingOutbox = await getOutboxItems(companyId);
     const pendingOrders = pendingOutbox
-      .filter(item => item.actionType === 'create_order' && item.payload?.order)
+      .filter(item => item.userId === activeUid && item.actionType === 'create_order' && item.payload?.order)
       .map(item => ({
         ...item.payload.order,
         id: item.payload.orderId || item.payload.order.id,
@@ -621,13 +611,18 @@ export async function getOrders(companyId) {
     const merged = Array.from(orderMap.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
     // Update local cache for future offline browsing
-    await cacheCollection(companyId, 'orders', merged);
+    await cacheCollection(companyId, 'orders', orders);
 
     return merged;
   } catch (err) {
     console.warn('[Order Service] Failed to fetch orders from server, loading from cache:', err);
-    const cached = await getCachedCollection(companyId, 'orders');
-    return cached.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    const cached = (await getCachedCollection(companyId, 'orders')).filter(order => !order.isPendingSync);
+    const uid = getActiveCachedUserId();
+    const pending = (await getOutboxItems(companyId)).filter(item => item.userId === uid && item.actionType === 'create_order' && item.payload?.order)
+      .map(item => ({ ...item.payload.order, id: item.payload.orderId || item.payload.order.id, isPendingSync: true }));
+    const map = new Map(cached.map(order => [order.id || order.orderNumber, order]));
+    pending.forEach(order => map.set(order.id || order.orderNumber, order));
+    return Array.from(map.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   }
 }
 
@@ -655,9 +650,10 @@ export async function getOrder(companyId, orderId) {
 
 async function getOrderOffline(companyId, orderId) {
   // 1. Check outbox pending items
+  const activeUid = getActiveCachedUserId();
   const outboxItems = await getOutboxItems(companyId);
   const foundOutbox = outboxItems.find(
-    i => i.actionType === 'create_order' && 
+    i => i.userId === activeUid && i.actionType === 'create_order' && 
          (i.payload?.orderId === orderId || i.payload?.order?.id === orderId || i.payload?.orderNumber === orderId)
   );
   if (foundOutbox && foundOutbox.payload?.order) {
@@ -665,7 +661,7 @@ async function getOrderOffline(companyId, orderId) {
   }
 
   // 2. Check local collection cache
-  const cachedOrders = await getCachedCollection(companyId, 'orders');
+  const cachedOrders = (await getCachedCollection(companyId, 'orders')).filter(order => !order.isPendingSync);
   const found = cachedOrders.find(o => o.id === orderId || o.orderNumber === orderId);
   return found || null;
 }

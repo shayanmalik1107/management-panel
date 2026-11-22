@@ -67,7 +67,13 @@ export default function TrialOtpModal({ isOpen, onClose, userProfile, onSuccess 
         })
       });
 
-      const data = await response.json();
+      let data = {};
+      try {
+        data = await response.json();
+      } catch (_) {
+        throw new Error('Verification service is momentarily starting up. Please click Send again.');
+      }
+
       if (!response.ok || !data.success) {
         throw new Error(data.error || 'Failed to send verification code to your email');
       }
@@ -106,7 +112,13 @@ export default function TrialOtpModal({ isOpen, onClose, userProfile, onSuccess 
         })
       });
 
-      const data = await response.json();
+      let data = {};
+      try {
+        data = await response.json();
+      } catch (_) {
+        throw new Error('Verification service is momentarily unreachable. Please try again.');
+      }
+
       if (!response.ok || !data.success) {
         throw new Error(data.error || 'Verification failed');
       }

@@ -1,13 +1,14 @@
 // Offline Context — Tracks connectivity and outbox queue sync
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useAuth } from './AuthContext';
-import { getOutboxItems, requestPersistentStorage } from '../services/offlineStorage';
+import { getOutboxItems, requestPersistentStorage, getActiveCachedUserId } from '../services/offlineStorage';
 import { processOutbox, onSyncStatusChange, initAutoSync } from '../services/syncEngine';
 
 const OfflineContext = createContext();
 
 export function OfflineProvider({ children }) {
-  const { companyId } = useAuth();
+  const { companyId, currentUser } = useAuth();
+  const userId = currentUser?.uid || getActiveCachedUserId();
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [pendingItems, setPendingItems] = useState([]);
@@ -17,12 +18,12 @@ export function OfflineProvider({ children }) {
   // Load outbox count
   const refreshOutbox = useCallback(async () => {
     try {
-      const items = await getOutboxItems(companyId);
+      const items = (await getOutboxItems(companyId)).filter(item => userId && item.userId === userId);
       setPendingItems(items);
     } catch (err) {
       console.warn('[Offline Context] Error reading outbox items:', err);
     }
-  }, [companyId]);
+  }, [companyId, userId]);
 
   useEffect(() => {
     refreshOutbox();

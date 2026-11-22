@@ -1,0 +1,13 @@
+{
+  "name": "LAMBA Business Management",
+  "short_name": "LAMBA",
+  "description": "Offline-first business management and field sales platform",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#151c48",
+  "icons": [
+    { "src": "/lambalogo.png", "sizes": "any", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

@@ -5,18 +5,21 @@ import { ref, onValue } from 'firebase/database';
 import { database } from '../../firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
+import { useOffline } from '../../contexts/OfflineContext';
 import { deleteProduct, cleanUpDuplicateProducts } from '../../services/productService';
 import { listenWarehouses } from '../../services/warehouseService';
 import { formatCurrency } from '../../utils/formatters';
 import FilterPanel from '../common/FilterPanel';
 import FlatList from '../common/FlatList';
-import { getOutboxItems, getCachedCollection, cacheCollection } from '../../services/offlineStorage';
+import { getOutboxItems, getCachedCollection, cacheCollection, getCacheUpdatedAt } from '../../services/offlineStorage';
 
 export default function ProductsList() {
   const { companyId, companyInfo, isAdmin, currentUser, userProfile } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
+  const { isOnline } = useOffline();
   const [products, setProducts] = useState([]);
+  const [stockUpdatedAt, setStockUpdatedAt] = useState(null);
   const [warehouses, setWarehouses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [cleaning, setCleaning] = useState(false);
@@ -42,11 +45,12 @@ export default function ProductsList() {
 
     const loadCachedProducts = async () => {
       try {
-        const cached = await getCachedCollection(companyId, 'products');
+        const cached = (await getCachedCollection(companyId, 'products')).filter(product => !product.isPendingSync);
         const outbox = await getOutboxItems(companyId);
         const pending = outbox
-          .filter(i => i.actionType === 'create_product' && i.payload?.product)
+          .filter(i => i.userId === currentUser?.uid && ['create_product', 'update_product'].includes(i.actionType) && i.payload?.product)
           .map(i => ({ ...i.payload.product, id: i.payload.productId || i.payload.product.id, isPendingSync: true }));
+        setStockUpdatedAt(await getCacheUpdatedAt(`products_${companyId}`));
 
         const map = new Map();
         cached.forEach(p => map.set(p.id, p));
@@ -82,7 +86,7 @@ export default function ProductsList() {
 
       getOutboxItems(companyId).then((outbox) => {
         const pending = outbox
-          .filter(i => i.actionType === 'create_product' && i.payload?.product)
+          .filter(i => i.userId === currentUser?.uid && ['create_product', 'update_product'].includes(i.actionType) && i.payload?.product)
           .map(i => ({ ...i.payload.product, id: i.payload.productId || i.payload.product.id, isPendingSync: true }));
 
         const map = new Map();
@@ -90,7 +94,8 @@ export default function ProductsList() {
         pending.forEach(p => map.set(p.id, p));
         const merged = Array.from(map.values()).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
-        cacheCollection(companyId, 'products', merged);
+        cacheCollection(companyId, 'products', list);
+        setStockUpdatedAt(Date.now());
         setProducts(merged);
         setLoading(false);
       }).catch(() => {
@@ -108,7 +113,7 @@ export default function ProductsList() {
       unsubWarehouses();
       unsubProducts();
     };
-  }, [companyId]);
+  }, [companyId, currentUser?.uid]);
 
   const handleCleanDuplicates = async () => {
     setCleaning(true);
@@ -278,7 +283,7 @@ export default function ProductsList() {
                     <th>Category</th>
                     {isAdmin && <th>Purchase Price</th>}
                     <th>Sale Price</th>
-                    <th>Stock</th>
+                    <th>{isOnline ? 'Stock' : 'Last synced stock'}</th>
                     <th>Status</th>
                     {isAdmin && <th style={{ width: 160 }}>Actions</th>}
                   </tr>
@@ -305,7 +310,7 @@ export default function ProductsList() {
                     {isAdmin && <td onClick={() => navigate(`/products/${product.id}`)}>{formatCurrency(product.purchasePrice, currency)}</td>}
                     <td className="font-medium" onClick={() => navigate(`/products/${product.id}`)}>{formatCurrency(product.salePrice, currency)}</td>
                     <td onClick={() => navigate(`/products/${product.id}`)}>
-                      {product.currentStock} pcs
+                      <span title={!isOnline && stockUpdatedAt ? `Last synchronized ${new Date(stockUpdatedAt).toLocaleString()}` : ''}>{product.currentStock} pcs</span>
                     </td>
                     <td onClick={() => navigate(`/products/${product.id}`)}>
                       {isOutOfStock ? (

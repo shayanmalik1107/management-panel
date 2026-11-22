@@ -1,7 +1,7 @@
 // Select Company Page — Clean light theme matching panel design system
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ref, onValue, update } from 'firebase/database';
+import { ref, onValue, update, get } from 'firebase/database';
 import { database } from '../../firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import { logout } from '../../services/authService';
@@ -16,58 +16,182 @@ export default function SelectCompanyPage() {
   const navigate = useNavigate();
   const toast = useToast();
 
-  const [companies, setCompanies] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const uid = userProfile?.uid || currentUser?.uid;
+  const cacheKey = uid ? `lamba_user_companies_${uid}` : null;
+
+  // 1. Instant Cache Initialization (0ms first paint)
+  const [companies, setCompanies] = useState(() => {
+    if (typeof window !== 'undefined' && cacheKey) {
+      try {
+        const raw = localStorage.getItem(cacheKey);
+        if (raw) return JSON.parse(raw);
+      } catch (_) {}
+    }
+    return [];
+  });
+
+  const [loading, setLoading] = useState(() => {
+    if (typeof window !== 'undefined' && cacheKey) {
+      try {
+        const raw = localStorage.getItem(cacheKey);
+        if (raw && JSON.parse(raw).length > 0) return false;
+      } catch (_) {}
+    }
+    return true;
+  });
+
   const [selectingId, setSelectingId] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showMaxUpgradeModal, setShowMaxUpgradeModal] = useState(false);
 
+  // High-performance targeted company loader
+  // Avoids downloading the entire `companies` tree (orders, products, customers) which can take 30+ seconds!
   useEffect(() => {
-    if (!userProfile?.uid) return;
+    const targetUid = userProfile?.uid || currentUser?.uid;
+    if (!targetUid) return;
 
-    const compsRef = ref(database, 'companies');
-    const unsub = onValue(compsRef, (snap) => {
-      const userComps = [];
-      if (snap.exists()) {
-        snap.forEach((child) => {
-          const companyData = child.val();
-          const info = companyData ? companyData.info : null;
-          const employees = companyData ? companyData.employees : null;
+    let isMounted = true;
 
-          // Check if user is owner OR listed in employees
-          const isOwner = info && info.ownerUid === userProfile.uid;
-          const isEmployee = employees && employees[userProfile.uid];
+    async function loadCompaniesFast() {
+      try {
+        const userComps = [];
+        const seenIds = new Set();
+        const companyIdsToFetch = new Set();
 
-          if (isOwner || isEmployee) {
-            const empCount = employees ? Object.keys(employees).length : 0;
-            userComps.push({
-              id: child.key,
-              name: info?.name || 'Unnamed Company',
-              joinCode: info?.joinCode || '',
-              currency: info?.currency || 'Rs',
-              owner: info?.owner || 'Admin',
-              phone: info?.phone || '',
-              isOwner: isOwner,
-              employeeCount: empCount,
-              status: info?.status || 'active',
-              createdAt: info?.createdAt || Date.now(),
+        // Include current companyId if available
+        if (userProfile?.companyId) {
+          companyIdsToFetch.add(userProfile.companyId);
+        }
+
+        // Step 1: Read lightweight adminCodes tree (a few KB without products or orders)
+        try {
+          const adminCodesSnap = await get(ref(database, 'adminCodes'));
+          if (adminCodesSnap.exists()) {
+            adminCodesSnap.forEach((child) => {
+              const codeData = child.val();
+              if (codeData && codeData.adminUid === targetUid && codeData.companyId) {
+                companyIdsToFetch.add(codeData.companyId);
+              }
             });
           }
-        });
+        } catch (codeErr) {
+          console.warn('Fast adminCodes lookup notice:', codeErr);
+        }
+
+        // Step 2: Fetch ONLY the lightweight `info` and `employees` nodes for the identified companies
+        if (companyIdsToFetch.size > 0) {
+          const fetchPromises = Array.from(companyIdsToFetch).map(async (cid) => {
+            try {
+              const [infoSnap, empSnap] = await Promise.all([
+                get(ref(database, `companies/${cid}/info`)),
+                get(ref(database, `companies/${cid}/employees`)),
+              ]);
+
+              if (infoSnap.exists()) {
+                const info = infoSnap.val();
+                const employees = empSnap.exists() ? empSnap.val() : {};
+                const isOwner = info?.ownerUid === targetUid || info?.adminUid === targetUid;
+                const isEmployee = employees && employees[targetUid];
+
+                return {
+                  id: cid,
+                  name: info?.name || 'Unnamed Company',
+                  joinCode: info?.joinCode || '',
+                  currency: info?.currency || 'Rs',
+                  owner: info?.owner || 'Admin',
+                  phone: info?.phone || '',
+                  isOwner: Boolean(isOwner),
+                  employeeCount: Object.keys(employees || {}).length,
+                  status: info?.status || 'active',
+                  createdAt: info?.createdAt || Date.now(),
+                };
+              }
+            } catch (cidErr) {
+              console.warn(`Notice fetching company ${cid}:`, cidErr);
+            }
+            return null;
+          });
+
+          const results = await Promise.all(fetchPromises);
+          results.forEach(comp => {
+            if (comp && !seenIds.has(comp.id)) {
+              seenIds.add(comp.id);
+              userComps.push(comp);
+            }
+          });
+        }
+
+        // Step 3: Fallback scan with a 3.5s timeout if no companies were found via adminCodes
+        if (userComps.length === 0) {
+          const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3500));
+          const fullFetchPromise = get(ref(database, 'companies'));
+          const snap = await Promise.race([fullFetchPromise, timeoutPromise]).catch(() => null);
+
+          if (snap && snap.exists()) {
+            snap.forEach((child) => {
+              const companyData = child.val();
+              const info = companyData ? companyData.info : null;
+              const employees = companyData ? companyData.employees : null;
+
+              const isOwner = info && (info.ownerUid === targetUid || info.adminUid === targetUid);
+              const isEmployee = employees && employees[targetUid];
+
+              if (isOwner || isEmployee) {
+                if (!seenIds.has(child.key)) {
+                  seenIds.add(child.key);
+                  userComps.push({
+                    id: child.key,
+                    name: info?.name || 'Unnamed Company',
+                    joinCode: info?.joinCode || '',
+                    currency: info?.currency || 'Rs',
+                    owner: info?.owner || 'Admin',
+                    phone: info?.phone || '',
+                    isOwner: Boolean(isOwner),
+                    employeeCount: employees ? Object.keys(employees).length : 0,
+                    status: info?.status || 'active',
+                    createdAt: info?.createdAt || Date.now(),
+                  });
+                }
+              }
+            });
+          }
+        }
+
+        if (isMounted) {
+          setCompanies(userComps);
+          setLoading(false);
+          if (cacheKey) {
+            localStorage.setItem(cacheKey, JSON.stringify(userComps));
+          }
+        }
+      } catch (err) {
+        console.error('Error loading companies:', err);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
+    }
 
-      setCompanies(userComps);
-      setLoading(false);
-    });
+    loadCompaniesFast();
 
-    return () => unsub();
-  }, [userProfile?.uid]);
+    return () => {
+      isMounted = false;
+    };
+  }, [userProfile?.uid, currentUser?.uid, userProfile?.companyId]);
 
   const handleSelectCompany = async (targetCompanyId) => {
+    // Prime speech synthesis within active user gesture
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.resume();
+      } catch (_) {}
+    }
     setSelectingId(targetCompanyId);
     try {
       await update(ref(database, `users/${userProfile.uid}`), { companyId: targetCompanyId });
+      localStorage.setItem(`lamba_selected_company_${userProfile.uid}`, targetCompanyId);
       sessionStorage.setItem('company_selected', 'true');
+      sessionStorage.setItem('lamba_auto_open_ai', 'true');
       toast.success('Switched to company workspace!');
       navigate('/dashboard');
     } catch (err) {

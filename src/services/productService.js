@@ -2,7 +2,7 @@
 import { ref, push, get, update, remove, set } from 'firebase/database';
 import { database } from '../firebase';
 import { generateId } from '../utils/codeGenerator';
-import { saveToOutbox, addToCachedCollection, cacheCollection, getCachedCollection, getOutboxItems } from './offlineStorage';
+import { saveToOutbox, addToCachedCollection, cacheCollection, getCachedCollection, getOutboxItems, getActiveCachedUserId } from './offlineStorage';
 
 export async function createProduct(companyId, productData, userId, userName) {
   const nameTrimmed = (productData.name || '').trim();
@@ -139,6 +139,27 @@ async function createProductOffline(companyId, productId, product, nameTrimmed, 
     entityId: productId,
     timestamp: Date.now(),
   };
+  let initialPurchase = null;
+  if (product.supplierName && Number(product.currentStock) > 0) {
+    const purchaseId = generateId('pur');
+    let purchaseTimestamp = Date.now();
+    if (product.purchaseDate) {
+      const selectedDate = new Date(product.purchaseDate);
+      const now = new Date();
+      selectedDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
+      purchaseTimestamp = selectedDate.getTime();
+    }
+    const quantity = Number(product.currentStock) || 0;
+    const cost = Number(product.purchasePrice) || 0;
+    initialPurchase = {
+      id: purchaseId, companyId, supplierName: product.supplierName,
+      reference: product.reference || 'Initial Stock', grandTotal: quantity * cost,
+      items: [{ productId, productName: nameTrimmed, sku: product.sku, quantity, purchasePrice: cost, salePrice: Number(product.salePrice) || 0, lineTotal: quantity * cost }],
+      notes: product.notes || `Initial stock purchase for ${nameTrimmed}`,
+      createdBy: userId || '', createdByName: userName || 'User',
+      createdAt: purchaseTimestamp, updatedAt: Date.now(),
+    };
+  }
 
   await saveToOutbox({
     companyId,
@@ -153,7 +174,8 @@ async function createProductOffline(companyId, productId, product, nameTrimmed, 
     description: `Product "${nameTrimmed}"`
   });
 
-  await addToCachedCollection(companyId, 'products', localProduct);
+  // Keep this product in the creator's pending outbox only. It must not leak
+  // into the shared company snapshot on a browser used by another account.
   return productId;
 }
 
@@ -206,6 +228,22 @@ export async function updateProduct(companyId, productId, productData, userId, u
   // Don't overwrite currentStock through product edit (use inventory for that)
   delete updatedProduct.currentStock;
 
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    const localProduct = { ...updatedProduct, id: productId, companyId, isPendingSync: true };
+    const actId = generateId('act');
+    const activity = {
+      id: actId, userId: userId || '', userName: userName || 'User',
+      action: `${userName || 'User'} updated product \"${nameTrimmed}\" (Offline)`,
+      entityType: 'product', entityId: productId, timestamp: Date.now(),
+    };
+    await saveToOutbox({
+      companyId, actionType: 'update_product', userId, userName,
+      payload: { productId, product: localProduct, activity },
+      description: `Update product \"${nameTrimmed}\"`,
+    });
+    return { isOffline: true, productId };
+  }
+
   Object.keys(updatedProduct).forEach(key => {
     if (updatedProduct[key] !== undefined) {
       updates[`companies/${companyId}/products/${productId}/${key}`] = updatedProduct[key];
@@ -222,77 +260,63 @@ export async function updateProduct(companyId, productId, productData, userId, u
     timestamp: Date.now(),
   };
 
-  await update(ref(database), updates);
+  try {
+    await update(ref(database), updates);
+  } catch (error) {
+    if (!navigator.onLine || /network|offline|failed to fetch|unavailable/i.test(error?.message || '')) {
+      const localProduct = { ...updatedProduct, id: productId, companyId, isPendingSync: true };
+      const activity = {
+        id: actId, userId: userId || '', userName: userName || 'User',
+        action: `${userName || 'User'} updated product \"${nameTrimmed}\" (Offline)`,
+        entityType: 'product', entityId: productId, timestamp: Date.now(),
+      };
+      await saveToOutbox({ companyId, actionType: 'update_product', userId, userName, payload: { productId, product: localProduct, activity }, description: `Update product \"${nameTrimmed}\"` });
+      return { isOffline: true, productId };
+    }
+    throw error;
+  }
 }
 
 export async function getProducts(companyId) {
-  if (typeof navigator !== 'undefined' && !navigator.onLine) {
-    return getCachedCollection(companyId, 'products');
-  }
-
-  try {
-    const snap = await get(ref(database, `companies/${companyId}/products`));
-    const products = [];
-    if (snap.exists()) {
-      snap.forEach(child => {
-        const val = child.val();
-        if (val && val.name && String(val.name).trim()) {
-          products.push({ id: child.key, ...val });
-        }
-      });
+  const userId = getActiveCachedUserId();
+  let cloudProducts = [];
+  if (typeof navigator === 'undefined' || navigator.onLine) {
+    try {
+      const snap = await get(ref(database, `companies/${companyId}/products`));
+      if (snap.exists()) {
+        snap.forEach(child => {
+          const value = child.val();
+          if (value && value.name && String(value.name).trim()) cloudProducts.push({ id: child.key, ...value });
+        });
+      }
+      // Store only server-confirmed products in the shared company snapshot.
+      await cacheCollection(companyId, 'products', cloudProducts);
+    } catch (error) {
+      console.warn('[Product Service] Server fetch failed, using local snapshot:', error);
+      cloudProducts = (await getCachedCollection(companyId, 'products')).filter(product => !product.isPendingSync);
     }
-
-    // Merge pending outbox products
-    const pendingOutbox = await getOutboxItems(companyId);
-    const pendingProds = pendingOutbox
-      .filter(item => item.actionType === 'create_product' && item.payload?.product)
-      .map(item => ({
-        ...item.payload.product,
-        id: item.payload.productId || item.payload.product.id,
-        isPendingSync: true,
-      }));
-
-    const prodMap = new Map();
-    products.forEach(p => prodMap.set(p.id, p));
-    pendingProds.forEach(p => prodMap.set(p.id, p));
-
-    const merged = Array.from(prodMap.values());
-    await cacheCollection(companyId, 'products', merged);
-    return merged;
-  } catch (err) {
-    console.warn('[Product Service] Server fetch failed, returning cached products:', err);
-    return getCachedCollection(companyId, 'products');
+  } else {
+    cloudProducts = (await getCachedCollection(companyId, 'products')).filter(product => !product.isPendingSync);
   }
+
+  const pending = await getOutboxItems(companyId);
+  // Pending admin product changes are visible only to the account that created them.
+  const ownPending = pending.filter(item => item.userId === userId);
+  const map = new Map(cloudProducts.map(product => [product.id, product]));
+  ownPending.forEach(item => {
+    const product = item.payload?.product;
+    const productId = item.payload?.productId || product?.id;
+    if (!product || !productId) return;
+    if (item.actionType === 'create_product' || item.actionType === 'update_product') {
+      map.set(productId, { ...map.get(productId), ...product, id: productId, isPendingSync: true });
+    }
+  });
+  return Array.from(map.values());
 }
 
 export async function getProduct(companyId, productId) {
-  if (typeof navigator !== 'undefined' && !navigator.onLine) {
-    return getProductOffline(companyId, productId);
-  }
-
-  try {
-    const snap = await get(ref(database, `companies/${companyId}/products/${productId}`));
-    if (snap.exists()) {
-      return { id: productId, ...snap.val() };
-    }
-    return getProductOffline(companyId, productId);
-  } catch (err) {
-    return getProductOffline(companyId, productId);
-  }
-}
-
-async function getProductOffline(companyId, productId) {
-  const outboxItems = await getOutboxItems(companyId);
-  const foundOutbox = outboxItems.find(
-    i => i.actionType === 'create_product' && 
-         (i.payload?.productId === productId || i.payload?.product?.id === productId)
-  );
-  if (foundOutbox && foundOutbox.payload?.product) {
-    return { ...foundOutbox.payload.product, id: productId, isPendingSync: true };
-  }
-
-  const cached = await getCachedCollection(companyId, 'products');
-  return cached.find(p => p.id === productId) || null;
+  const products = await getProducts(companyId);
+  return products.find(product => product.id === productId) || null;
 }
 
 export async function deleteProduct(companyId, productId, productName, userId, userName) {

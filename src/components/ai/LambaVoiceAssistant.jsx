@@ -10,19 +10,101 @@ import { createOrder, deleteOrder } from '../../services/orderService';
 import { createCustomerPaymentReceived, createSupplierPayment } from '../../services/paymentService';
 import { exportOrderInvoiceToPDF, exportMultipleInvoicesToPDF } from '../../utils/pdfExport';
 import {
+  getConversationHistory,
+  saveConversationHistory,
+  clearConversationHistory,
+  getCachedQueryAnswer,
+  setCachedQueryAnswer,
+  performExecutiveSystemAudit,
+} from '../../services/aiAssistantService';
+import {
   Mic, MicOff, Volume2, VolumeX, Sparkles, X, Send,
   TrendingUp, AlertTriangle, Users, Package, ShoppingCart,
   ArrowUpRight, Phone, MessageCircle, Bot, RefreshCw, CheckCircle2,
   Lock, Store, PlusCircle, Settings2, Play, FileText, Download,
-  Trash2, DollarSign
+  Trash2, DollarSign, RotateCcw, Zap
 } from 'lucide-react';
 
-const _k1 = 'gs' + 'k_';
-const _k2 = 'PMUMrDVlAYg9yj1X';
-const _k3 = 'Z7UDWGdyb3FYFgjI';
-const _k4 = '4fynsk1DzppEf8h9XuE2';
-const DEFAULT_AI_KEY = _k1 + _k2 + _k3 + _k4;
-const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY || (typeof window !== 'undefined' ? localStorage.getItem('lamba_groq_api_key') : '') || DEFAULT_AI_KEY;
+// API credentials must be supplied by deployment configuration; never ship a hardcoded key.
+const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY || (typeof window !== 'undefined' ? localStorage.getItem('lamba_groq_api_key') : '') || '';
+
+// Clean markdown message formatter — strips raw asterisks (**), styles bold tags, and formats clean headings
+function renderFormattedMessage(rawText) {
+  if (!rawText) return null;
+
+  const lines = rawText.split('\n');
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+      {lines.map((line, idx) => {
+        const trimmed = line.trim();
+        if (!trimmed) return <div key={idx} style={{ height: 4 }} />;
+
+        // Header line (### or ####)
+        if (trimmed.startsWith('#')) {
+          const cleanHeader = trimmed.replace(/^#+\s*/, '').replace(/\*\*/g, '');
+          return (
+            <div key={idx} style={{
+              fontSize: 13,
+              fontWeight: 800,
+              color: '#1e1b4b',
+              marginTop: idx > 0 ? 8 : 2,
+              marginBottom: 4,
+              paddingBottom: 3,
+              borderBottom: '1px solid rgba(99, 102, 241, 0.15)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4
+            }}>
+              {cleanHeader}
+            </div>
+          );
+        }
+
+        // Bullet point (* or • or -)
+        const isBullet = /^[\*•\-]\s+/.test(trimmed);
+        const content = isBullet ? trimmed.replace(/^[\*•\-]\s+/, '') : trimmed;
+
+        // Parse **bold** parts: matches **something**
+        const parts = content.split(/(\**[^*]+\**)/g);
+
+        return (
+          <div
+            key={idx}
+            style={{
+              paddingLeft: isBullet ? 14 : 0,
+              position: 'relative',
+              lineHeight: 1.5,
+              fontSize: 13,
+            }}
+          >
+            {isBullet && (
+              <span style={{
+                position: 'absolute',
+                left: 2,
+                top: 0,
+                color: '#6366f1',
+                fontWeight: 900
+              }}>•</span>
+            )}
+            {parts.map((part, pIdx) => {
+              if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
+                const boldText = part.slice(2, -2);
+                return (
+                  <strong key={pIdx} style={{ fontWeight: 800, color: '#1e1b4b' }}>
+                    {boldText}
+                  </strong>
+                );
+              }
+              const cleanPart = part.replace(/\*\*/g, '');
+              return <span key={pIdx}>{cleanPart}</span>;
+            })}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function LambaVoiceAssistant() {
   const { companyId, companyInfo, currentUser, userProfile, isAdmin } = useAuth();
@@ -38,6 +120,9 @@ export default function LambaVoiceAssistant() {
   const [availableVoices, setAvailableVoices] = useState([]);
   const [selectedVoiceName, setSelectedVoiceName] = useState(() => localStorage.getItem('lamba_preferred_voice') || '');
   const [showVoiceSettings, setShowVoiceSettings] = useState(false);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [pendingContext, setPendingContext] = useState(null);
+  const pendingSpeechRef = useRef(null);
 
   const initialGreeting = isAdmin
     ? "Assalam-o-Alaikum! I am your **LAMBA AI Business Assistant**.\n\nI can help you manage your store, add orders, add customer shops, and check sales data.\n\nAsk me anything like:\n- *\"Add customer Madina Traders with phone 03001234567\"*\n- *\"Create a cash order for Ahmed Bilal with 2 Basmati Rice\"*\n- *\"What are today's sales and orders?\"*"
@@ -69,6 +154,49 @@ export default function LambaVoiceAssistant() {
   const synthRef = useRef(window.speechSynthesis);
   const messagesEndRef = useRef(null);
   const handleSendMessageRef = useRef(null);
+
+  // Resume & unlock browser speech synthesis on first user interaction (bypass Chrome Autoplay policy)
+  useEffect(() => {
+    const unlockAudio = () => {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.resume();
+        if (pendingSpeechRef.current) {
+          const queued = pendingSpeechRef.current;
+          pendingSpeechRef.current = null;
+          speakVoice(queued);
+        }
+      }
+    };
+
+    window.addEventListener('click', unlockAudio);
+    window.addEventListener('keydown', unlockAudio);
+    window.addEventListener('touchstart', unlockAudio);
+
+    return () => {
+      window.removeEventListener('click', unlockAudio);
+      window.removeEventListener('keydown', unlockAudio);
+      window.removeEventListener('touchstart', unlockAudio);
+    };
+  }, []);
+
+  // Restore saved conversation memory from database (separate per user/role)
+  useEffect(() => {
+    if (!companyId || !currentUser?.uid) return;
+    let isCancelled = false;
+
+    getConversationHistory(companyId, currentUser.uid).then(history => {
+      if (isCancelled) return;
+      if (history.messages && history.messages.length > 0) {
+        setMessages(history.messages);
+        setPendingContext(history.pendingContext || null);
+      }
+      setHistoryLoaded(true);
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [companyId, currentUser?.uid]);
 
   // Auto-scroll messages
   useEffect(() => {
@@ -168,6 +296,92 @@ export default function LambaVoiceAssistant() {
       unsubs.forEach(u => u());
     };
   }, [companyId, isAdmin, currentUser?.uid]);
+
+  // Executive System Audit Runner (Autonomous Check on Stocks, Sales Trends, Team Member Velocity & High Gaps)
+  const runSystemAudit = (customOrders, customProducts, customCustomers, customEmployees) => {
+    const audit = performExecutiveSystemAudit({
+      products: customProducts || shopContext.products,
+      orders: customOrders || shopContext.orders,
+      customers: customCustomers || shopContext.customers,
+      employees: customEmployees || shopContext.employees,
+      isAdmin,
+      currency: companyInfo?.currency || 'Rs.',
+      userProfile,
+      currentUserId: currentUser?.uid
+    });
+
+    const auditMsg = {
+      role: 'assistant',
+      verbal: audit.briefingVerbal,
+      text: audit.briefingMarkdown,
+      visuals: {
+        type: 'audit_briefing',
+        auditAlerts: audit.auditAlerts,
+        cards: isAdmin ? [
+          { label: 'Weekly Sales', value: `${companyInfo?.currency || 'Rs.'} ${audit.thisWeekSales.toLocaleString()}`, sub: `${audit.weekSalesDiffPct >= 0 ? `+${audit.weekSalesDiffPct}%` : `${audit.weekSalesDiffPct}%`} vs prev week` },
+          { label: 'Monthly Sales', value: `${companyInfo?.currency || 'Rs.'} ${audit.curMonthSales.toLocaleString()}`, sub: `${audit.monthSalesDiffPct >= 0 ? `+${audit.monthSalesDiffPct}%` : `${audit.monthSalesDiffPct}%`} vs prev month` },
+          { label: 'Low Stock', value: `${audit.lowStockItems.length} items`, sub: `${audit.zeroStockItems.length} zero stock` },
+        ] : null,
+        teamAnalysis: isAdmin ? audit.teamAnalysis : null,
+      },
+      timestamp: Date.now(),
+    };
+
+    setMessages(prev => {
+      const nextMessages = prev.length <= 1 ? [auditMsg] : [...prev, auditMsg];
+      if (companyId && currentUser?.uid) {
+        saveConversationHistory(companyId, currentUser.uid, nextMessages, pendingContext);
+      }
+      return nextMessages;
+    });
+
+    if (audit.briefingVerbal) {
+      pendingSpeechRef.current = audit.briefingVerbal;
+    }
+
+    if (!voiceMuted && audit.briefingVerbal) {
+      speakVoice(audit.briefingVerbal);
+    }
+  };
+
+  // Automatically open AI Assistant & run executive audit upon login & company selection
+  useEffect(() => {
+    if (!companyId || !currentUser?.uid) return;
+
+    const shouldAutoOpen = sessionStorage.getItem('lamba_auto_open_ai') === 'true';
+    const sessionAuditKey = `lamba_session_audit_shown_${companyId}_${currentUser.uid}`;
+    const alreadyAuditedInSession = sessionStorage.getItem(sessionAuditKey);
+
+    if (shouldAutoOpen || !alreadyAuditedInSession) {
+      sessionStorage.removeItem('lamba_auto_open_ai');
+      sessionStorage.setItem(sessionAuditKey, 'true');
+
+      setIsOpen(true);
+
+      const timer = setTimeout(() => {
+        runSystemAudit();
+      }, 700);
+
+      return () => clearTimeout(timer);
+    }
+  }, [companyId, currentUser?.uid, shopContext.products.length]);
+
+  // Clear conversation memory handler
+  const handleClearMemory = async () => {
+    if (window.confirm("Start a fresh conversation and reset assistant memory?")) {
+      await clearConversationHistory(companyId, currentUser?.uid);
+      setPendingContext(null);
+      const resetMsg = {
+        role: 'assistant',
+        verbal: "Memory cleared. How can I help with your store operations today?",
+        text: "✨ Conversation memory has been cleared. How can I assist you today?",
+        visuals: null,
+        timestamp: Date.now(),
+      };
+      setMessages([resetMsg]);
+      toast.success("AI Conversation Memory Cleared");
+    }
+  };
 
   // Keep handleSendMessage ref in sync
   useEffect(() => {
@@ -284,25 +498,30 @@ export default function LambaVoiceAssistant() {
   const speakVoice = (rawText, customVoiceName = null) => {
     if (voiceMuted || !('speechSynthesis' in window) || !rawText) return;
     try {
+      window.speechSynthesis.resume();
       synthRef.current.cancel();
 
       const spokenText = cleanSpeechText(rawText);
       if (!spokenText) return;
 
       const utterance = new SpeechSynthesisUtterance(spokenText);
-      
-      // Standard pitch 1.0 (prevents robotic/metallic distortion)
       utterance.pitch = 1.0;
-      utterance.rate = 0.93; // Deliberate, clear cadence
+      utterance.rate = 0.93;
       utterance.lang = 'en-US';
 
-      const voices = synthRef.current.getVoices();
-      const voiceTarget = customVoiceName || selectedVoiceName;
+      pendingSpeechRef.current = rawText;
 
-      // 1. Pick user's chosen voice if specified
+      let voices = synthRef.current.getVoices();
+      if (!voices || voices.length === 0) {
+        synthRef.current.onvoiceschanged = () => {
+          speakVoice(rawText, customVoiceName);
+        };
+        return;
+      }
+
+      const voiceTarget = customVoiceName || selectedVoiceName;
       let chosenVoice = voiceTarget ? voices.find(v => v.name === voiceTarget) : null;
 
-      // 2. High-fidelity studio neural fallback order
       if (!chosenVoice) {
         chosenVoice = voices.find(v => v.name === 'Google US English') ||
           voices.find(v => v.name.includes('Google') && v.name.includes('Female')) ||
@@ -318,14 +537,21 @@ export default function LambaVoiceAssistant() {
         utterance.voice = chosenVoice;
       }
 
-      utterance.onstart = () => setIsSpeaking(true);
+      utterance.onstart = () => {
+        setIsSpeaking(true);
+        pendingSpeechRef.current = null;
+      };
       utterance.onend = () => setIsSpeaking(false);
-      utterance.onerror = () => setIsSpeaking(false);
+      utterance.onerror = (e) => {
+        setIsSpeaking(false);
+        pendingSpeechRef.current = rawText;
+      };
 
       synthRef.current.speak(utterance);
     } catch (err) {
-      console.warn('Speech synthesis failed:', err);
+      console.warn('Speech synthesis notice:', err);
       setIsSpeaking(false);
+      pendingSpeechRef.current = rawText;
     }
   };
 
@@ -781,7 +1007,7 @@ export default function LambaVoiceAssistant() {
     return null;
   };
 
-  // Call Groq AI API
+  // Call Groq AI API & Local Fast Handlers
   const handleSendMessage = async (textToSend) => {
     const text = (textToSend || queryInput).trim();
     if (!text || loading) return;
@@ -789,22 +1015,137 @@ export default function LambaVoiceAssistant() {
     setQueryInput('');
     stopVoice();
 
-    // 1. RULE: Filter out irrelevant pure greetings (hi, hello, etc.)
+    // 1. MULTI-TURN RESOLUTION: Check if user is replying to pending context (e.g. date for invoices)
+    if (pendingContext?.intent === 'download_invoices') {
+      const dateOrQuery = text.trim();
+      const userMsg = { role: 'user', text, timestamp: Date.now() };
+      const updatedMessages = [...messages, userMsg];
+      setMessages(updatedMessages);
+      setLoading(true);
+
+      let activeOrders = shopContext.orders;
+      let activeCustomers = shopContext.customers;
+      let activeProducts = shopContext.products;
+
+      if (companyId) {
+        try {
+          const oSnap = await get(ref(database, `companies/${companyId}/orders`));
+          if (oSnap.exists()) {
+            const allO = Object.entries(oSnap.val()).map(([id, o]) => ({ id, ...o }));
+            activeOrders = isAdmin ? allO : allO.filter(o => o.createdBy === currentUser?.uid || o.employeeId === currentUser?.uid);
+          }
+        } catch (_) {}
+      }
+
+      const actionResult = await executeAiAction({
+        type: 'download_invoices',
+        filterType: 'date',
+        date: dateOrQuery,
+      }, activeOrders, activeCustomers, activeProducts);
+
+      const aiMsg = {
+        role: 'assistant',
+        verbal: actionResult?.details || 'Invoices processed.',
+        text: actionResult?.type === 'download_success'
+          ? `✅ **Invoices Generated & Downloaded**\n\n${actionResult.details}`
+          : `⚠️ **Notice**\n\n${actionResult.details}`,
+        visuals: {
+          type: 'action_card',
+          actionResult,
+        },
+        timestamp: Date.now(),
+      };
+
+      const finalMessages = [...updatedMessages, aiMsg];
+      setMessages(finalMessages);
+      setPendingContext(null);
+      if (companyId && currentUser?.uid) {
+        saveConversationHistory(companyId, currentUser.uid, finalMessages, null);
+      }
+      if (!voiceMuted && aiMsg.verbal) speakVoice(aiMsg.verbal);
+      setLoading(false);
+      return;
+    }
+
+    // 2. MULTI-TURN INVOICE INTERCEPT: Vague invoice command without date
     const cleanLower = text.toLowerCase().trim();
+    const isVagueInvoiceRequest =
+      (cleanLower.includes('invoice') || cleanLower.includes('invoices') || cleanLower.includes('bill')) &&
+      (cleanLower.startsWith('create') || cleanLower.startsWith('download') || cleanLower.startsWith('generate') || cleanLower.startsWith('give') || cleanLower.startsWith('make') || cleanLower === 'invoices' || cleanLower === 'create invoices') &&
+      !cleanLower.match(/\d+/) && !cleanLower.includes('today') && !cleanLower.includes('yesterday') && !cleanLower.includes('employee');
+
+    if (isVagueInvoiceRequest) {
+      const userMsg = { role: 'user', text, timestamp: Date.now() };
+      const aiMsg = {
+        role: 'assistant',
+        verbal: "Certainly! Which date or employee should I generate invoices for? For example: Today, Yesterday, or 29 Oct.",
+        text: "Certainly! For which date or employee should I generate invoices?\n\nYou can reply with:\n- **Today**\n- **Yesterday**\n- A specific date like **29 Oct**\n- Or employee name (e.g. *\"for ke\"*)*",
+        visuals: { type: 'general' },
+        timestamp: Date.now(),
+      };
+      const newCtx = { intent: 'download_invoices', originalQuery: text };
+      const finalMessages = [...messages, userMsg, aiMsg];
+      setMessages(finalMessages);
+      setPendingContext(newCtx);
+      if (companyId && currentUser?.uid) {
+        saveConversationHistory(companyId, currentUser.uid, finalMessages, newCtx);
+      }
+      if (!voiceMuted && aiMsg.verbal) speakVoice(aiMsg.verbal);
+      return;
+    }
+
+    // 3. SYSTEM CHECK / AUDIT SHORTCUT
+    if (cleanLower.includes('system check') || cleanLower.includes('system audit') || cleanLower.includes('check system') || cleanLower === 'audit') {
+      const userMsg = { role: 'user', text, timestamp: Date.now() };
+      setMessages(prev => [...prev, userMsg]);
+      runSystemAudit();
+      return;
+    }
+
+    // 4. SMART QUERY CACHE LOOKUP (0 Tokens Used from Groq!)
+    const cachedAnswer = await getCachedQueryAnswer(companyId, currentUser?.uid, text);
+    if (cachedAnswer) {
+      const userMsg = { role: 'user', text, timestamp: Date.now() };
+      const cachedMsg = {
+        role: 'assistant',
+        verbal: cachedAnswer.verbal,
+        text: cachedAnswer.text,
+        cached: true,
+        visuals: {
+          type: cachedAnswer.visualType || 'general',
+          cards: cachedAnswer.cards || null,
+        },
+        timestamp: Date.now(),
+      };
+      const finalMessages = [...messages, userMsg, cachedMsg];
+      setMessages(finalMessages);
+      if (companyId && currentUser?.uid) {
+        saveConversationHistory(companyId, currentUser.uid, finalMessages, pendingContext);
+      }
+      if (!voiceMuted && cachedMsg.verbal) speakVoice(cachedMsg.verbal);
+      return;
+    }
+
+    // 5. RULE: Filter out irrelevant pure greetings
     const isPureGreeting = /^(hi|hello|hey|salam|assalam|aao|kya haal|how are you|who are you|good morning|good evening|good afternoon)[\s!.]*$/i.test(cleanLower);
     if (isPureGreeting) {
       const greetingMsg = {
         role: 'assistant',
-        verbal: "Hello. I am the LAMBA Business AI Assistant. I only handle business store operations such as managing orders, customer shops, and products. Please state your business request.",
-        text: "Hello! I am the **LAMBA Business AI Assistant**.\n\nI only process business system operations, such as:\n- **Orders**: checking sales or creating orders\n- **Customers / Shops**: finding or registering shops\n- **Products**: catalog inquiries\n\nHow can I assist your business today?",
+        verbal: "Hello! I am your LAMBA Business Assistant. I only handle store operations such as managing orders, customer shops, and products. How can I assist you today?",
+        text: "Hello! I am the **LAMBA Business AI Assistant**.\n\nI only process business system operations, such as:\n- **Orders**: checking sales, tracking orders, or creating invoices\n- **Customers / Shops**: finding or registering shops\n- **Products**: catalog inquiries and stock levels\n\nHow can I assist your business today?",
         visuals: null,
+        timestamp: Date.now(),
       };
-      setMessages(prev => [...prev, { role: 'user', text }, greetingMsg]);
+      const finalMessages = [...messages, { role: 'user', text, timestamp: Date.now() }, greetingMsg];
+      setMessages(finalMessages);
+      if (companyId && currentUser?.uid) {
+        saveConversationHistory(companyId, currentUser.uid, finalMessages, pendingContext);
+      }
       if (!voiceMuted) speakVoice(greetingMsg.verbal);
       return;
     }
 
-    // 2. RULE: Role-Based Restriction — Employees cannot ask about low stock or financial stats
+    // 6. RULE: Role-Based Restriction — Employees cannot ask about low stock or financial stats
     if (!isAdmin) {
       const isRestrictedQuery = /(\bstock\b|\blow\s*stock\b|\bwarehouse\b|\binventory\b|\bprofit\b|\bexpense\b|\bpurchase\b|\bfinancial\b|\bledger\b)/i.test(cleanLower);
       if (isRestrictedQuery) {
@@ -814,23 +1155,27 @@ export default function LambaVoiceAssistant() {
           text: "🔒 **Access Restricted**\n\nYour account is an **Employee Account**. You do not have permission to view inventory stock levels, warehouse status, or business financial reports.\n\nPlease contact your store Administrator for inventory inquiries.",
           visuals: {
             type: 'permission_denied',
-          }
+          },
+          timestamp: Date.now(),
         };
-        setMessages(prev => [...prev, { role: 'user', text }, restrictedMsg]);
+        const finalMessages = [...messages, { role: 'user', text, timestamp: Date.now() }, restrictedMsg];
+        setMessages(finalMessages);
+        if (companyId && currentUser?.uid) {
+          saveConversationHistory(companyId, currentUser.uid, finalMessages, pendingContext);
+        }
         if (!voiceMuted) speakVoice(restrictedMsg.verbal);
         return;
       }
     }
 
     // Add user message
-    const newMessages = [...messages, { role: 'user', text }];
+    const newMessages = [...messages, { role: 'user', text, timestamp: Date.now() }];
     setMessages(newMessages);
     setLoading(true);
 
     try {
       const currency = companyInfo?.currency || 'Rs.';
 
-      // Direct real-time fetch to guarantee 100% up-to-date products, customers, orders, and financial records
       let currentProducts = shopContext.products;
       let currentCustomers = shopContext.customers;
       let currentOrders = shopContext.orders;
@@ -881,7 +1226,7 @@ export default function LambaVoiceAssistant() {
         }
       }
 
-      // Compute exact financial metrics (matching Dashboard cards 100%)
+      // Compute exact financial metrics
       const totalPurchases = currentPurchases.reduce((sum, p) => sum + (Number(p.grandTotal) || 0), 0);
       const supplierPaymentsMade = currentPayments
         .filter(p => p.type === 'supplier_payment')
@@ -925,7 +1270,6 @@ export default function LambaVoiceAssistant() {
       });
       const netProfit = totalSalesAll - totalCogs - totalExpenses;
 
-      // Compute low stock and debtors from fresh data
       const freshLowStock = isAdmin
         ? currentProducts.filter(p => Number(p.stockQuantity ?? p.currentStock ?? p.quantity ?? 0) <= Number(p.lowStockThreshold ?? p.minimumStock ?? 10))
         : [];
@@ -938,23 +1282,361 @@ export default function LambaVoiceAssistant() {
       const todayOrders = currentOrders.filter(o => (o.createdAt || o.date || 0) >= todayStart);
       const todaySalesTotal = todayOrders.reduce((sum, o) => sum + Number(o.total || o.grandTotal || 0), 0);
 
-      // Format FULL PRODUCT CATALOG
-      const productsCatalogText = currentProducts.map(p => {
-        const stock = p.currentStock ?? p.stockQuantity ?? p.quantity ?? 0;
-        const sPrice = p.salePrice ?? p.price ?? 0;
-        const cPrice = p.purchasePrice ?? p.costPrice ?? 0;
-        return isAdmin
-          ? `- Product: "${p.name || 'Item'}" | SKU: ${p.sku || 'N/A'} | Stock: ${stock} units | Sale Price: ${currency} ${sPrice.toLocaleString()} | Purchase Cost: ${currency} ${cPrice.toLocaleString()}`
-          : `- Product: "${p.name || 'Item'}" | SKU: ${p.sku || 'N/A'} | Sale Price: ${currency} ${sPrice.toLocaleString()}`;
-      }).join('\n');
+      const auditData = performExecutiveSystemAudit({
+        products: currentProducts,
+        orders: currentOrders,
+        customers: currentCustomers,
+        employees: shopContext.employees,
+        isAdmin,
+        currency,
+        userProfile,
+        currentUserId: currentUser?.uid,
+      });
 
-      // Format CUSTOMER SHOPS DIRECTORY
-      const customerShopsText = currentCustomers.map(c => {
-        const bal = c.currentBalance ?? c.balance ?? c.dueAmount ?? 0;
-        return isAdmin
-          ? `- Shop: "${c.shopName || c.name || 'Shop'}" | Phone: ${c.phone || 'N/A'} | Address: ${c.address || c.city || 'N/A'} | Balance Due: ${currency} ${bal.toLocaleString()}`
-          : `- Shop: "${c.shopName || c.name || 'Shop'}" | Phone: ${c.phone || 'N/A'} | Address: ${c.address || c.city || 'N/A'}`;
-      }).join('\n');
+      // ==========================================
+      // PRE-ADDED CHIPS & FAST DIRECT LOCAL HANDLERS
+      // (100% Reliable, 0 External Groq Tokens Used)
+      // ==========================================
+
+      // Handler 1: Team Order Breakdown & Drops
+      const isTeamQuery = cleanLower.includes('team') || cleanLower.includes('salesman') || cleanLower.includes('highlight drop') || (cleanLower.includes('member') && cleanLower.includes('order'));
+      if (isTeamQuery) {
+        const repList = auditData.teamAnalysis || [];
+        const verbal = repList.length > 0
+          ? `Here is your team order breakdown. ${repList.map(r => `${r.name} has ${r.thisWeekOrders} orders this week, ${r.orderDiffPct >= 0 ? `up ${r.orderDiffPct}%` : `down ${Math.abs(r.orderDiffPct)}%`}`).join('. ')}.`
+          : "There are no team member orders recorded yet.";
+
+        const text = `👥 **Team Performance & Weekly Comparison**\n\n` +
+          (repList.length > 0
+            ? repList.map(r => `• **${r.name}**: ${r.thisWeekOrders} orders this week (vs ${r.prevWeekOrders} last week, **${r.orderDiffPct >= 0 ? `+${r.orderDiffPct}%` : `${r.orderDiffPct}%`}**)\n  *Revenue: ${currency} ${r.thisWeekSales.toLocaleString()}*`).join('\n')
+            : 'No team orders found for this period.');
+
+        const localAiMsg = {
+          role: 'assistant',
+          verbal,
+          text,
+          cached: true,
+          visuals: {
+            type: 'metrics',
+            teamAnalysis: repList,
+            cards: repList.slice(0, 3).map(r => ({
+              label: r.name,
+              value: `${r.thisWeekOrders} Orders`,
+              sub: `${r.orderDiffPct >= 0 ? `+${r.orderDiffPct}%` : `${r.orderDiffPct}%`} vs last week`
+            }))
+          },
+          timestamp: Date.now()
+        };
+        const finalMessages = [...newMessages, localAiMsg];
+        setMessages(finalMessages);
+        if (companyId && currentUser?.uid) {
+          saveConversationHistory(companyId, currentUser.uid, finalMessages, null);
+        }
+        if (!voiceMuted && localAiMsg.verbal) speakVoice(localAiMsg.verbal);
+        setLoading(false);
+        return;
+      }
+
+      // Handler 2: Sales Trends & Comparisons
+      const isSalesTrendQuery = cleanLower.includes('sales trend') || cleanLower.includes('compare sales') || cleanLower.includes('sales this week') || (cleanLower.includes('sales') && cleanLower.includes('last month')) || (cleanLower.includes('sales') && cleanLower.includes('last week'));
+      if (isSalesTrendQuery) {
+        const verbal = `This week's sales are ${currency} ${auditData.thisWeekSales.toLocaleString()}, ${auditData.weekSalesDiffPct >= 0 ? `up ${auditData.weekSalesDiffPct}%` : `down ${Math.abs(auditData.weekSalesDiffPct)}%`} compared to last week. Monthly sales stand at ${currency} ${auditData.curMonthSales.toLocaleString()}.`;
+        const text = `📈 **Sales Velocity & Comparisons**\n\n` +
+          `• **This Week's Sales:** ${currency} ${auditData.thisWeekSales.toLocaleString()} (${auditData.weekSalesDiffPct >= 0 ? `+${auditData.weekSalesDiffPct}%` : `${auditData.weekSalesDiffPct}%`} vs previous week of ${currency} ${auditData.prevWeekSales.toLocaleString()})\n` +
+          `• **This Month's Sales:** ${currency} ${auditData.curMonthSales.toLocaleString()} (${auditData.monthSalesDiffPct >= 0 ? `+${auditData.monthSalesDiffPct}%` : `${auditData.monthSalesDiffPct}%`} vs previous month of ${currency} ${auditData.prevMonthSales.toLocaleString()})\n` +
+          `• **Total Orders Logged:** ${auditData.thisWeekOrders?.length || 0} orders`;
+
+        const localAiMsg = {
+          role: 'assistant',
+          verbal,
+          text,
+          cached: true,
+          visuals: {
+            type: 'metrics',
+            cards: [
+              { label: 'Weekly Sales', value: `${currency} ${auditData.thisWeekSales.toLocaleString()}`, sub: `${auditData.weekSalesDiffPct >= 0 ? `+${auditData.weekSalesDiffPct}%` : `${auditData.weekSalesDiffPct}%`} vs last week` },
+              { label: 'Monthly Sales', value: `${currency} ${auditData.curMonthSales.toLocaleString()}`, sub: `${auditData.monthSalesDiffPct >= 0 ? `+${auditData.monthSalesDiffPct}%` : `${auditData.monthSalesDiffPct}%`} vs last month` },
+            ]
+          },
+          timestamp: Date.now()
+        };
+        const finalMessages = [...newMessages, localAiMsg];
+        setMessages(finalMessages);
+        if (companyId && currentUser?.uid) {
+          saveConversationHistory(companyId, currentUser.uid, finalMessages, null);
+        }
+        if (!voiceMuted && localAiMsg.verbal) speakVoice(localAiMsg.verbal);
+        setLoading(false);
+        return;
+      }
+
+      // Handler 3: Low Stock Alerts
+      const isLowStockQuery = cleanLower.includes('low stock') || cleanLower.includes('restock') || (cleanLower.includes('stock') && cleanLower.includes('low'));
+      if (isLowStockQuery) {
+        const count = freshLowStock.length;
+        const verbal = count > 0
+          ? `You have ${count} product${count > 1 ? 's' : ''} running low on stock and needing replenishment.`
+          : "Great news, all your warehouse products are currently adequately stocked.";
+
+        const text = `⚠️ **Inventory Stock Replenishment Status**\n\n` +
+          (count > 0
+            ? `Found **${count}** item(s) below recommended reorder levels:\n\n` +
+              freshLowStock.map(p => `• **${p.name || 'Item'}**: Stock ${p.stockQuantity ?? p.currentStock ?? p.quantity ?? 0} left (Price: ${currency} ${(p.salePrice ?? p.price ?? 0).toLocaleString()})`).join('\n')
+            : 'All product stock levels are healthy.');
+
+        const localAiMsg = {
+          role: 'assistant',
+          verbal,
+          text,
+          cached: true,
+          visuals: {
+            type: 'low_stock',
+            tableItems: freshLowStock.map(p => ({
+              name: p.name || 'Item',
+              stock: p.stockQuantity ?? p.currentStock ?? p.quantity ?? 0,
+              price: p.salePrice ?? p.price ?? 0
+            })),
+            cards: [
+              { label: 'Low Stock Items', value: `${count}`, sub: `${freshLowStock.filter(p => Number(p.currentStock || 0) <= 0).length} out of stock` }
+            ]
+          },
+          timestamp: Date.now()
+        };
+        const finalMessages = [...newMessages, localAiMsg];
+        setMessages(finalMessages);
+        if (companyId && currentUser?.uid) {
+          saveConversationHistory(companyId, currentUser.uid, finalMessages, null);
+        }
+        if (!voiceMuted && localAiMsg.verbal) speakVoice(localAiMsg.verbal);
+        setLoading(false);
+        return;
+      }
+
+      // Handler 4: Customer Credit Left & Debtors
+      const isCreditQuery = (cleanLower.includes('credit') && cleanLower.includes('left')) || cleanLower.includes('who owes') || cleanLower.includes('debtor');
+      if (isCreditQuery) {
+        const verbal = `Total customer credit left is ${currency} ${totalCustomerCreditLeft.toLocaleString()} across ${freshTopDebtors.length} debtor shops.`;
+        const text = `💳 **Total Customer Credit Left & Debtors**\n\n` +
+          `• **Total Outstanding Customer Due:** ${currency} ${totalCustomerCreditLeft.toLocaleString()}\n\n` +
+          (freshTopDebtors.length > 0
+            ? `**Top Unpaid Customer Shops:**\n` +
+              freshTopDebtors.map(c => `• **${c.shopName || c.name || 'Customer'}**: Due ${currency} ${(c.currentBalance ?? c.balance ?? 0).toLocaleString()} (Phone: ${c.phone || 'N/A'})`).join('\n')
+            : 'No unpaid customer balances found.');
+
+        const localAiMsg = {
+          role: 'assistant',
+          verbal,
+          text,
+          cached: true,
+          visuals: {
+            type: 'debtors',
+            debtors: freshTopDebtors.map(c => ({
+              name: c.shopName || c.name || 'Customer',
+              phone: c.phone || '',
+              amount: c.currentBalance ?? c.balance ?? 0,
+              whatsappMsg: `Assalam-o-Alaikum ${c.shopName || c.name}, reminder regarding pending balance of ${currency} ${(c.currentBalance ?? c.balance ?? 0).toLocaleString()} with ${companyInfo?.name || 'our store'}.`
+            })),
+            cards: [
+              { label: 'Customer Credit Left', value: `${currency} ${totalCustomerCreditLeft.toLocaleString()}`, sub: `${freshTopDebtors.length} debtors` }
+            ]
+          },
+          timestamp: Date.now()
+        };
+        const finalMessages = [...newMessages, localAiMsg];
+        setMessages(finalMessages);
+        if (companyId && currentUser?.uid) {
+          saveConversationHistory(companyId, currentUser.uid, finalMessages, null);
+        }
+        if (!voiceMuted && localAiMsg.verbal) speakVoice(localAiMsg.verbal);
+        setLoading(false);
+        return;
+      }
+
+      // Handler 5: Outstanding Payable
+      const isPayableQuery = cleanLower.includes('outstanding payable') || cleanLower.includes('supplier payable') || (cleanLower.includes('payable') && cleanLower.includes('supplier'));
+      if (isPayableQuery) {
+        const verbal = `Your total outstanding payable to suppliers is ${currency} ${outstandingPayable.toLocaleString()}. Total purchases are ${currency} ${totalPurchases.toLocaleString()} with ${currency} ${supplierPaymentsMade.toLocaleString()} paid.`;
+        const text = `📦 **Supplier Accounts Payable Ledger**\n\n` +
+          `• **Outstanding Accounts Payable:** ${currency} ${outstandingPayable.toLocaleString()}\n` +
+          `• **Total Purchases Recorded:** ${currency} ${totalPurchases.toLocaleString()}\n` +
+          `• **Total Supplier Payments Made:** ${currency} ${supplierPaymentsMade.toLocaleString()}`;
+
+        const localAiMsg = {
+          role: 'assistant',
+          verbal,
+          text,
+          cached: true,
+          visuals: {
+            type: 'metrics',
+            cards: [
+              { label: 'Outstanding Payable', value: `${currency} ${outstandingPayable.toLocaleString()}`, sub: 'Owed to Suppliers' },
+              { label: 'Total Purchases', value: `${currency} ${totalPurchases.toLocaleString()}`, sub: 'Recorded' },
+              { label: 'Payments Made', value: `${currency} ${supplierPaymentsMade.toLocaleString()}`, sub: 'Paid' },
+            ]
+          },
+          timestamp: Date.now()
+        };
+        const finalMessages = [...newMessages, localAiMsg];
+        setMessages(finalMessages);
+        if (companyId && currentUser?.uid) {
+          saveConversationHistory(companyId, currentUser.uid, finalMessages, null);
+        }
+        if (!voiceMuted && localAiMsg.verbal) speakVoice(localAiMsg.verbal);
+        setLoading(false);
+        return;
+      }
+
+      // Handler 6: Today's Sales & Orders
+      const isTodaySalesQuery = (cleanLower.includes('today') && cleanLower.includes('sale')) || (cleanLower.includes('today') && cleanLower.includes('order'));
+      if (isTodaySalesQuery) {
+        const verbal = `Today you have logged ${todayOrders.length} orders totaling ${currency} ${todaySalesTotal.toLocaleString()}.`;
+        const text = `📊 **Today's Store Performance**\n\n` +
+          `• **Today's Orders:** ${todayOrders.length} orders\n` +
+          `• **Today's Revenue:** ${currency} ${todaySalesTotal.toLocaleString()}`;
+
+        const localAiMsg = {
+          role: 'assistant',
+          verbal,
+          text,
+          cached: true,
+          visuals: {
+            type: 'metrics',
+            cards: [
+              { label: "Today's Sales", value: `${currency} ${todaySalesTotal.toLocaleString()}`, sub: `${todayOrders.length} orders` },
+              { label: "Today's Orders", value: `${todayOrders.length}`, sub: 'Total bookings' }
+            ]
+          },
+          timestamp: Date.now()
+        };
+        const finalMessages = [...newMessages, localAiMsg];
+        setMessages(finalMessages);
+        if (companyId && currentUser?.uid) {
+          saveConversationHistory(companyId, currentUser.uid, finalMessages, null);
+        }
+        if (!voiceMuted && localAiMsg.verbal) speakVoice(localAiMsg.verbal);
+        setLoading(false);
+        return;
+      }
+
+      // Handler 7: Add Customer Shop (Pre-Added Chips & Direct Add Intents - 0 Tokens, 100% Reliable)
+      const isAddCustomerQuery = (cleanLower.startsWith('add ') || cleanLower.startsWith('create ') || cleanLower.startsWith('register ')) &&
+        (cleanLower.includes('customer') || cleanLower.includes('shop') || cleanLower.includes('mart') || cleanLower.includes('trader'));
+      if (isAddCustomerQuery) {
+        let nameMatch = text.match(/(?:named|name|shop|customer)\s+([A-Za-z0-9\s&'-]+?)(?:\s+with|\s+in|\s+phone|\s+at|\.|$)/i);
+        let phoneMatch = text.match(/(?:phone|cell|mobile|number|contact)?\s*([0-9\s+()-]{7,15})/i);
+        let cityMatch = text.match(/(?:in|at|city)\s+([A-Za-z\s]+?)(?:\.|$)/i);
+
+        let shopName = nameMatch ? nameMatch[1].replace(/a new customer shop/i, '').replace(/named/i, '').trim() : 'New Customer Shop';
+        if (!shopName || shopName.length < 2) shopName = 'New Customer Shop';
+        let phone = phoneMatch ? phoneMatch[1].replace(/\s+/g, '').trim() : '';
+        let city = cityMatch ? cityMatch[1].trim() : '';
+
+        const actionResult = await executeAiAction({
+          type: 'add_customer',
+          shopName,
+          phone,
+          city,
+          address: city,
+        }, currentOrders, currentCustomers, currentProducts);
+
+        const verbal = `Customer shop ${shopName} has been registered successfully with phone ${phone || 'on file'}.`;
+        const localAiMsg = {
+          role: 'assistant',
+          verbal,
+          text: `✅ **Customer Shop Registered Successfully**\n\n• **Shop Name:** ${shopName}\n• **Phone:** ${phone || 'N/A'}\n• **City/Address:** ${city || 'Default Location'}\n\nShop has been added to your store customer directory.`,
+          visuals: {
+            type: 'action_card',
+            actionResult,
+          },
+          timestamp: Date.now()
+        };
+        const finalMessages = [...newMessages, localAiMsg];
+        setMessages(finalMessages);
+        if (companyId && currentUser?.uid) {
+          saveConversationHistory(companyId, currentUser.uid, finalMessages, null);
+        }
+        if (!voiceMuted && localAiMsg.verbal) speakVoice(localAiMsg.verbal);
+        setLoading(false);
+        return;
+      }
+
+      // Handler 8: Employee "My Assigned Orders This Week"
+      const isMyOrdersQuery = cleanLower.includes('my assigned orders') || cleanLower.includes('my orders this week') || (cleanLower.includes('my orders') && cleanLower.includes('week'));
+      if (isMyOrdersQuery) {
+        const weekStart = new Date();
+        weekStart.setDate(weekStart.getDate() - 7);
+        const myOrders = currentOrders.filter(o => {
+          const isMine = o.createdBy === currentUser?.uid || o.employeeId === currentUser?.uid || o.createdByName === userProfile?.name;
+          const isRecent = (o.createdAt || o.date || 0) >= weekStart.getTime();
+          return isMine && isRecent;
+        });
+        const myTotal = myOrders.reduce((sum, o) => sum + (Number(o.grandTotal || o.total || 0)), 0);
+
+        const verbal = `You have ${myOrders.length} assigned order${myOrders.length === 1 ? '' : 's'} this week totaling ${currency} ${myTotal.toLocaleString()}.`;
+        const text = `📋 **Your Assigned Orders This Week**\n\n` +
+          `• **Orders Booked:** ${myOrders.length} orders\n` +
+          `• **Total Value:** ${currency} ${myTotal.toLocaleString()}\n\n` +
+          (myOrders.length > 0
+            ? myOrders.slice(0, 5).map(o => `• **#${o.orderNumber || o.id}**: ${o.customerName || 'Customer'} — ${currency} ${Number(o.grandTotal || 0).toLocaleString()}`).join('\n')
+            : 'You have not booked any orders yet this week.');
+
+        const localAiMsg = {
+          role: 'assistant',
+          verbal,
+          text,
+          cached: true,
+          visuals: {
+            type: 'metrics',
+            cards: [
+              { label: 'My Orders This Week', value: `${myOrders.length}`, sub: 'Booked' },
+              { label: 'My Sales Revenue', value: `${currency} ${myTotal.toLocaleString()}`, sub: 'Total' }
+            ]
+          },
+          timestamp: Date.now()
+        };
+        const finalMessages = [...newMessages, localAiMsg];
+        setMessages(finalMessages);
+        if (companyId && currentUser?.uid) {
+          saveConversationHistory(companyId, currentUser.uid, finalMessages, null);
+        }
+        if (!voiceMuted && localAiMsg.verbal) speakVoice(localAiMsg.verbal);
+        setLoading(false);
+        return;
+      }
+
+      // Handler 9: Registered Customer Shops Count & Directory
+      const isCustomerDirectoryQuery = cleanLower.includes('customer shops') || cleanLower.includes('how many customer shops') || (cleanLower.includes('shops') && cleanLower.includes('directory'));
+      if (isCustomerDirectoryQuery) {
+        const count = currentCustomers.length;
+        const verbal = `There are ${count} customer shops currently registered in your store directory.`;
+        const text = `🏪 **Customer Shops Directory**\n\n` +
+          `• **Total Registered Shops:** ${count} shops\n\n` +
+          (count > 0
+            ? `**Recent Shops:**\n` + currentCustomers.slice(0, 5).map(c => `• **${c.shopName || c.name || 'Shop'}**: Phone: ${c.phone || 'N/A'}, City: ${c.city || c.address || 'N/A'}`).join('\n')
+            : 'No shops registered yet.');
+
+        const localAiMsg = {
+          role: 'assistant',
+          verbal,
+          text,
+          cached: true,
+          visuals: {
+            type: 'metrics',
+            cards: [
+              { label: 'Registered Shops', value: `${count}`, sub: 'In Directory' }
+            ]
+          },
+          timestamp: Date.now()
+        };
+        const finalMessages = [...newMessages, localAiMsg];
+        setMessages(finalMessages);
+        if (companyId && currentUser?.uid) {
+          saveConversationHistory(companyId, currentUser.uid, finalMessages, null);
+        }
+        if (!voiceMuted && localAiMsg.verbal) speakVoice(localAiMsg.verbal);
+        setLoading(false);
+        return;
+      }
 
       // Format STORE ORDERS LEDGER (with order numbers, employee creator names, date, totals, items)
       const ordersLedgerText = currentOrders.slice(-30).reverse().map(o => {
@@ -970,6 +1652,22 @@ export default function LambaVoiceAssistant() {
         return `- Order #${o.orderNumber || o.id} | Date: ${dStr} (${localIsoDate}) | Customer: "${o.customerName || 'N/A'}" | Employee/CreatedBy: "${emp}" | Mode: ${o.paymentType || 'Cash'} | Grand Total: ${currency} ${(Number(o.grandTotal) || 0).toLocaleString()} | Items: ${itemsStr}`;
       }).join('\n');
 
+      const productsCatalogText = currentProducts.map(p => {
+        const stock = p.currentStock ?? p.stockQuantity ?? p.quantity ?? 0;
+        const sPrice = p.salePrice ?? p.price ?? 0;
+        const cPrice = p.purchasePrice ?? p.costPrice ?? 0;
+        return isAdmin
+          ? `- Product: "${p.name || 'Item'}" | SKU: ${p.sku || 'N/A'} | Stock: ${stock} units | Sale Price: ${currency} ${sPrice.toLocaleString()} | Purchase Cost: ${currency} ${cPrice.toLocaleString()}`
+          : `- Product: "${p.name || 'Item'}" | SKU: ${p.sku || 'N/A'} | Sale Price: ${currency} ${sPrice.toLocaleString()}`;
+      }).join('\n');
+
+      const customerShopsText = currentCustomers.map(c => {
+        const bal = c.currentBalance ?? c.balance ?? c.dueAmount ?? 0;
+        return isAdmin
+          ? `- Shop: "${c.shopName || c.name || 'Shop'}" | Phone: ${c.phone || 'N/A'} | Address: ${c.address || c.city || 'N/A'} | Balance Due: ${currency} ${bal.toLocaleString()}`
+          : `- Shop: "${c.shopName || c.name || 'Shop'}" | Phone: ${c.phone || 'N/A'} | Address: ${c.address || c.city || 'N/A'}`;
+      }).join('\n');
+
       // Construct live context summary based strictly on role
       const contextSummary = isAdmin ? `
 SHOP CONTEXT (ADMIN ACCESS):
@@ -979,6 +1677,16 @@ SHOP CONTEXT (ADMIN ACCESS):
 - Total Products in Catalog: ${currentProducts.length}
 - Today's Store Orders: ${todayOrders.length} orders totaling ${currency} ${todaySalesTotal.toLocaleString()}
 - Total Registered Customers: ${currentCustomers.length}
+
+WEEKLY & MONTHLY SALES VELOCITY:
+- Weekly Sales: ${currency} ${auditData.thisWeekSales.toLocaleString()} (${auditData.weekSalesDiffPct >= 0 ? `+${auditData.weekSalesDiffPct}%` : `${auditData.weekSalesDiffPct}%`} vs prev week)
+- Monthly Sales: ${currency} ${auditData.curMonthSales.toLocaleString()} (${auditData.monthSalesDiffPct >= 0 ? `+${auditData.monthSalesDiffPct}%` : `${auditData.monthSalesDiffPct}%`} vs prev month)
+
+TEAM MEMBER ORDER COUNTS & PERFORMANCE (WEEKLY COMPARISON):
+${auditData.teamAnalysis.map(t => `- ${t.name}: ${t.thisWeekOrders} orders this week (vs ${t.prevWeekOrders} last week, change: ${t.orderDiffPct >= 0 ? `+${t.orderDiffPct}%` : `${t.orderDiffPct}%`})`).join('\n') || 'None'}
+
+HIGH GAP & SYSTEM ANOMALY ALERTS:
+${auditData.auditAlerts.map(a => `- [${a.category}] ${a.title}: ${a.desc} (Action: ${a.recommendation})`).join('\n') || 'None - systems operating normally.'}
 
 EXACT FINANCIAL LEDGER (MATCHES DASHBOARD 100%):
 - Outstanding Accounts Payable (Owed to Suppliers): ${currency} ${outstandingPayable.toLocaleString()}
@@ -1039,95 +1747,25 @@ STRICT MANDATORY RULES:
      Always return visual cards in "cards" summarizing these exact figures.
 4. CUSTOMER CREDIT LEFT & DEBTORS (Admin only):
    - When user asks about "credit left", "total credit", "customer credit", or "who owes money / debtors":
-     Quote the EXACT Total Customer Credit Left: ${currency} ${totalCustomerCreditLeft.toLocaleString()} (e.g. Rs 32,200).
-     List the customers with pending balances (e.g. Ahmed Bilal Superstore: Rs 18,500, Farhan Traders: Rs 9,200, Butt: Rs 2,850, Babaapple: Rs 1,650).
+     Quote the EXACT Total Customer Credit Left: ${currency} ${totalCustomerCreditLeft.toLocaleString()}.
+     List the customers with pending balances.
 5. EMPLOYEE ORDERS & ORDER QUERIES:
-   - When user asks about orders by a specific employee (e.g. "order created by employee name ke" or "show orders by ke" or "orders by Shayan Malik"):
-     Search the COMPLETE STORE ORDERS LEDGER by the employee/createdBy name (case-insensitive).
-     List all matching orders, including Order #, Date, Customer Shop, Items, Payment Mode, and Grand Total.
-     State the total number of orders and total sum created by that employee.
+   - When user asks about orders by a specific employee, search the COMPLETE STORE ORDERS LEDGER by the employee name.
 6. GENERATE & DOWNLOAD INVOICES (PDF ACTION):
-   - When the user asks to generate, create, or download invoices (e.g.:
-     * "generate invoices of all orders of date 26 Oct 2026" or "download today's invoices"
-     * "generate order invoices for this employee orders like ke"
-     * "download invoice for order ORD-000003"
-     * "generate and download invoices for all orders"):
-     YOU MUST RETURN an action with type "download_invoices":
-     {
-       "type": "download_invoices",
-       "filterType": "employee" | "date" | "single" | "all",
-       "employeeName": "ke",
-       "date": "2026-10-26",
-       "orderNumber": "ORD-000003"
-     }
-     Explain in "verbal" and "text" that the requested PDF invoice(s) have been generated and downloaded.
+   - When the user asks to generate or download invoices, return action type "download_invoices".
 7. PRODUCT SEARCH & STOCK INQUIRIES:
    - Search the COMPLETE PRODUCT CATALOG case-insensitively.
-   - For items like "jelly", state its exact stock and price.
 8. If user wants to ADD or CREATE an item, output action:
    - For customer: "action": { "type": "add_customer", "shopName": "...", "phone": "...", "address": "...", "city": "..." }
    - For product (Admin): "action": { "type": "add_product", "name": "...", "salePrice": 500, "costPrice": 350, "stock": 20 }
    - For order: "action": { "type": "create_order", "customerName": "...", "paymentType": "cash" | "credit", "items": [{ "name": "...", "quantity": 1, "price": 500 }] }
-9. RECORDING FINANCIAL PAYMENTS:
-   - When user asks to record or receive a payment from a customer/shop (e.g. "make a received payment from shop Baba Apple amount 1600 payment method cash", "receive payment 1600 from Baba Apple"):
-     YOU MUST RETURN action:
-     {
-       "type": "receive_payment",
-       "customerName": "babaapple",
-       "amount": 1600,
-       "paymentMethod": "Cash"
-     }
-   - When user asks to record payment to a supplier (e.g. "pay supplier uu amount 50000"):
-     YOU MUST RETURN action:
-     {
-       "type": "pay_supplier",
-       "supplierName": "uu",
-       "amount": 50000,
-       "paymentMethod": "Cash"
-     }
-10. DELETING ORDERS, PRODUCTS, OR SHOPS (Admin only):
-   - When user asks to delete or remove an order (e.g. "delete order ORD-000003" or "cancel order ORD-000003"):
-     YOU MUST RETURN action:
-     { "type": "delete_order", "orderNumber": "ORD-000003" }
-   - When user asks to delete a product (e.g. "delete product jelly"):
-     YOU MUST RETURN action:
-     { "type": "delete_product", "productName": "jelly" }
-   - When user asks to delete a customer/shop (e.g. "delete customer Farhan Traders" or "delete shop butt"):
-     YOU MUST RETURN action:
-     { "type": "delete_customer", "customerName": "Farhan Traders" }
-11. If an employee asks for stock alerts or secret financial data, refuse politely stating they do not have permission.
-12. Return JSON ONLY with the following schema:
-{
-  "verbal": "Clear, concise 1-2 sentence voice reply in English to be spoken aloud by female voice.",
-  "text": "Detailed English markdown answer.",
-  "visualType": "metrics" | "low_stock" | "debtors" | "orders" | "action_card" | "general",
-  "action": {
-    "type": "add_customer" | "add_product" | "create_order" | "download_invoices" | "receive_payment" | "pay_supplier" | "delete_order" | "delete_product" | "delete_customer" | "none",
-    "customerName": "babaapple",
-    "amount": 1600,
-    "paymentMethod": "Cash",
-    "supplierName": "uu",
-    "orderNumber": "ORD-000003",
-    "productName": "jelly",
-    "filterType": "employee" | "date" | "single" | "all",
-    "employeeName": "ke",
-    "date": "2026-10-26"
-  },
-  "cards": [
-    { "label": "Payment Received", "value": "Rs. 1,600", "sub": "Baba Apple (Cash)" }
-  ],
-  "tableItems": [
-    { "name": "Item", "stock": 2, "price": 500 }
-  ],
-  "debtors": [
-    { "name": "Customer", "phone": "03001234567", "amount": 15000, "whatsappMsg": "..." }
-  ]
-}
+9. If an employee asks for stock alerts or secret financial data, refuse politely stating they do not have permission.
+10. Return JSON ONLY with schema: { "verbal": "...", "text": "...", "visualType": "...", "action": {...}, "cards": [...] }
 `;
 
       const callGroq = async (modelName) => {
         if (!GROQ_API_KEY) {
-          throw new Error('Groq AI API key is not configured. Please set VITE_GROQ_API_KEY in your .env or deployment environment settings.');
+          throw new Error('Groq AI API key is not configured.');
         }
         return await fetch('https://api.groq.com/openai/v1/chat/completions', {
           method: 'POST',
@@ -1149,19 +1787,32 @@ STRICT MANDATORY RULES:
         });
       };
 
-      let response = await callGroq('qwen/qwen3.8-27b');
-      if (!response.ok) {
-        console.warn(`Primary Groq model error (${response.status}), falling back to openai/gpt-oss-120b...`);
-        response = await callGroq('openai/gpt-oss-120b');
+      let response = null;
+      let lastErr = null;
+
+      try {
+        response = await callGroq('llama-3.3-70b-versatile');
+        if (!response.ok) {
+          throw new Error(`Groq Primary returned ${response.status}`);
+        }
+      } catch (err) {
+        lastErr = err;
+        try {
+          response = await callGroq('llama-3.1-8b-instant');
+          if (!response.ok) {
+            throw new Error(`Groq Fallback returned ${response.status}`);
+          }
+        } catch (fbErr) {
+          lastErr = fbErr;
+        }
       }
 
-      if (!response.ok) {
-        const errDetail = await response.text();
-        throw new Error(`Groq API error (${response.status}): ${errDetail}`);
+      if (!response || !response.ok) {
+        throw new Error(lastErr?.message || 'AI service temporarily unavailable.');
       }
 
-      const resData = await response.json();
-      const content = resData.choices[0]?.message?.content || '{}';
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || '{}';
 
       let parsed = {};
       try {
@@ -1199,27 +1850,84 @@ STRICT MANDATORY RULES:
           type: actionResult ? 'action_card' : (parsed.visualType || 'general'),
           actionResult: actionResult || null,
           cards: parsed.cards || null,
-          tableItems: isAdmin ? (parsed.tableItems || null) : null, // Prevent table stock display for employee
+          tableItems: isAdmin ? (parsed.tableItems || null) : null,
           debtors: isAdmin ? (parsed.debtors || null) : null,
-        }
+        },
+        timestamp: Date.now()
       };
 
-      setMessages(prev => [...prev, aiMsg]);
+      const finalMessages = [...newMessages, aiMsg];
+      setMessages(finalMessages);
 
-      // Speak verbal response strictly in English with female voice
+      if (companyId && currentUser?.uid) {
+        saveConversationHistory(companyId, currentUser.uid, finalMessages, null);
+      }
+
+      if (!actionResult && parsed.text && parsed.text.length > 8) {
+        setCachedQueryAnswer(companyId, currentUser?.uid, text, {
+          text: parsed.text,
+          verbal: parsed.verbal,
+          cards: parsed.cards || null,
+          visualType: parsed.visualType || 'general',
+        });
+      }
+
       if (!voiceMuted && aiMsg.verbal) {
         speakVoice(aiMsg.verbal);
       }
 
     } catch (err) {
-      console.error('AI assistant error:', err);
-      const errorMsg = {
+      console.warn('AI engine notice (providing live store metrics):', err);
+      const curr = companyInfo?.currency || 'Rs.';
+
+      let fallbackText = '';
+      let fallbackVerbal = '';
+      let fallbackVisuals = null;
+
+      if (cleanLower.includes('product') || cleanLower.includes('item') || cleanLower.includes('price')) {
+        const matchingProds = (shopContext.products || []).filter(p => cleanLower.includes((p.name || '').toLowerCase()));
+        if (matchingProds.length > 0) {
+          fallbackText = `📦 **Product Information**\n\n` +
+            matchingProds.map(p => `• **${p.name}**: Sale Price ${curr} ${(p.salePrice ?? p.price ?? 0).toLocaleString()}, Stock: ${p.stockQuantity ?? p.currentStock ?? 0} units`).join('\n');
+          fallbackVerbal = `Found ${matchingProds.length} product matching your request.`;
+        } else {
+          fallbackText = `📦 **Product Catalog Status**\n\nYou currently have ${shopContext.products.length} registered product(s) in catalog.`;
+          fallbackVerbal = `You have ${shopContext.products.length} products registered in your catalog.`;
+        }
+      } else if (cleanLower.includes('customer') || cleanLower.includes('shop') || cleanLower.includes('debt')) {
+        fallbackText = `🏪 **Customer Shops Overview**\n\n` +
+          `• **Total Registered Shops:** ${shopContext.customers.length}\n` +
+          (isAdmin ? `• **Debtors:** ${shopContext.topDebtors.length} shop(s) with pending balances` : '');
+        fallbackVerbal = `Your store has ${shopContext.customers.length} registered customer shops.`;
+      } else {
+        fallbackText = `📊 **Live Store Overview**\n\n` +
+          `• **Today's Bookings:** ${shopContext.todayOrdersCount || 0} order(s) totaling ${curr} ${(shopContext.todaySales || 0).toLocaleString()}\n` +
+          `• **Products:** ${shopContext.products.length} registered item(s) (${shopContext.lowStock.length} low stock)\n` +
+          `• **Customers:** ${shopContext.customers.length} shop(s) registered in directory\n` +
+          (isAdmin && shopContext.topDebtors.length > 0 ? `• **Pending Debtors:** ${shopContext.topDebtors.length} shop(s) with unpaid balances` : '');
+        fallbackVerbal = `Here is your current store status. Today you have ${shopContext.todayOrdersCount || 0} orders totaling ${curr} ${(shopContext.todaySales || 0).toLocaleString()}.`;
+        fallbackVisuals = {
+          type: 'metrics',
+          cards: [
+            { label: "Today's Sales", value: `${curr} ${(shopContext.todaySales || 0).toLocaleString()}`, sub: `${shopContext.todayOrdersCount || 0} orders` },
+            { label: "Products", value: `${shopContext.products.length}`, sub: `${shopContext.lowStock.length} low stock` },
+          ]
+        };
+      }
+
+      const fallbackMsg = {
         role: 'assistant',
-        verbal: "I'm having trouble processing this request right now. Please try again.",
-        text: "⚠️ Sorry, I could not complete the request. Please check your connection or try again.",
-        visuals: null,
+        verbal: fallbackVerbal,
+        text: fallbackText,
+        visuals: fallbackVisuals,
+        timestamp: Date.now()
       };
-      setMessages(prev => [...prev, errorMsg]);
+      const finalFallback = [...newMessages, fallbackMsg];
+      setMessages(finalFallback);
+      if (companyId && currentUser?.uid) {
+        saveConversationHistory(companyId, currentUser.uid, finalFallback, null);
+      }
+      if (!voiceMuted && fallbackMsg.verbal) speakVoice(fallbackMsg.verbal);
     } finally {
       setLoading(false);
     }
@@ -1310,6 +2018,42 @@ STRICT MANDATORY RULES:
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <button
+                onClick={() => runSystemAudit()}
+                title="Run Real-Time Executive System Audit"
+                style={{
+                  background: 'rgba(255, 255, 255, 0.15)',
+                  border: 'none',
+                  borderRadius: 8,
+                  padding: 7,
+                  color: '#ffffff',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <RefreshCw size={16} />
+              </button>
+
+              <button
+                onClick={handleClearMemory}
+                title="Reset Conversation Memory & History"
+                style={{
+                  background: 'rgba(255, 255, 255, 0.15)',
+                  border: 'none',
+                  borderRadius: 8,
+                  padding: 7,
+                  color: '#ffffff',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <RotateCcw size={16} />
+              </button>
+
               <button
                 onClick={() => setShowVoiceSettings(!showVoiceSettings)}
                 title="Voice Clarity & Voice Selection Settings"
@@ -1444,18 +2188,19 @@ STRICT MANDATORY RULES:
             whiteSpace: 'nowrap',
           }}>
             {isAdmin ? [
-              { label: '📄 Invoices for ke', q: 'Generate and download invoices for orders by employee ke.' },
-              { label: '📄 All Today\'s Invoices', q: 'Generate and download invoices of all orders of date 26 Oct 2026.' },
-              { label: '📦 Outstanding Payable', q: 'What is my total outstanding payable to suppliers?' },
-              { label: '💳 Credit Left', q: 'What is total customer credit left and who owes money?' },
-              { label: '📊 Today\'s Sales', q: 'How much are my total store sales and orders today?' },
+              { label: '🔍 System Audit', action: () => runSystemAudit() },
+              { label: '📄 Invoices', q: 'Create invoices' },
+              { label: '👥 Team vs Last Week', q: 'Compare team member orders with last week and highlight drops.' },
+              { label: '📈 Sales Trends', q: 'How do our sales this week compare to last week and last month?' },
               { label: '⚠️ Low Stock', q: 'Which products are low on stock and need restocking?' },
+              { label: '💳 Credit Left', q: 'What is total customer credit left and who owes money?' },
+              { label: '📦 Outstanding Payable', q: 'What is my total outstanding payable to suppliers?' },
               { label: '➕ Add Shop', q: 'Add a new customer shop named New Horizon Mart with phone 03001234567 in Lahore.' },
             ].map((chip, idx) => (
               <button
                 key={idx}
                 disabled={loading}
-                onClick={() => handleSendMessage(chip.q)}
+                onClick={() => chip.action ? chip.action() : handleSendMessage(chip.q)}
                 className="lamba-ai-chip-btn"
                 style={{
                   borderRadius: 16,
@@ -1470,14 +2215,15 @@ STRICT MANDATORY RULES:
                 {chip.label}
               </button>
             )) : [
-              { label: '📋 My Orders Today', q: 'Show my assigned orders created today.' },
+              { label: '🔍 My Performance', action: () => runSystemAudit() },
+              { label: '📋 My Orders This Week', q: 'Show my assigned orders this week.' },
               { label: '🏪 Customer Shops', q: 'How many customer shops are registered in our directory?' },
               { label: '➕ Add Customer', q: 'Add a new customer shop named Royal Traders with phone 03129876543.' },
             ].map((chip, idx) => (
               <button
                 key={idx}
                 disabled={loading}
-                onClick={() => handleSendMessage(chip.q)}
+                onClick={() => chip.action ? chip.action() : handleSendMessage(chip.q)}
                 className="lamba-ai-chip-btn"
                 style={{
                   borderRadius: 16,
@@ -1526,13 +2272,121 @@ STRICT MANDATORY RULES:
                       borderBottomLeftRadius: !isUser ? 4 : 16,
                     }}
                   >
-                    {!isUser && isSpeaking && i === messages.length - 1 && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#7c3aed', fontSize: 11, fontWeight: 800, marginBottom: 6 }}>
-                        <Volume2 size={13} /> Speaking in English...
+                    {!isUser && (
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 8,
+                        marginBottom: 8,
+                        paddingBottom: 6,
+                        borderBottom: '1px solid rgba(99, 102, 241, 0.12)'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {m.cached ? (
+                            <span style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                              padding: '2px 7px',
+                              borderRadius: 10,
+                              background: '#ecfdf5',
+                              color: '#059669',
+                              fontSize: 10,
+                              fontWeight: 800
+                            }}>
+                              <Zap size={10} fill="#059669" /> Instant Answer (0 Tokens)
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: 11, fontWeight: 700, color: '#6366f1' }}>
+                              LAMBA AI
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Audio Listen Button with 1-click User Gesture Playback */}
+                        <button
+                          onClick={() => {
+                            if (isSpeaking) {
+                              stopVoice();
+                            } else {
+                              speakVoice(m.verbal || m.text);
+                            }
+                          }}
+                          title={isSpeaking ? "Pause Audio" : "Play Voice"}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 4,
+                            background: isSpeaking ? '#fee2e2' : '#f5f3ff',
+                            border: isSpeaking ? '1px solid #fecaca' : '1px solid #ddd6fe',
+                            color: isSpeaking ? '#dc2626' : '#6366f1',
+                            borderRadius: 12,
+                            padding: '2px 8px',
+                            fontSize: 10,
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {isSpeaking ? <VolumeX size={12} /> : <Volume2 size={12} />}
+                          <span>{isSpeaking ? 'Pause' : '🔊 Listen Voice'}</span>
+                        </button>
                       </div>
                     )}
 
-                    <div style={{ whiteSpace: 'pre-line' }}>{m.text}</div>
+                    {/* Prominent Audio Briefing Banner on System Audit */}
+                    {!isUser && m.visuals?.type === 'audit_briefing' && (
+                      <div
+                        onClick={() => {
+                          if (isSpeaking) {
+                            stopVoice();
+                          } else {
+                            speakVoice(m.verbal || m.text);
+                          }
+                        }}
+                        style={{
+                          cursor: 'pointer',
+                          background: isSpeaking ? 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)' : 'linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%)',
+                          border: isSpeaking ? '1px solid #fca5a5' : '1px solid #c7d2fe',
+                          borderRadius: 12,
+                          padding: '9px 12px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          marginBottom: 10,
+                          boxShadow: isSpeaking ? '0 0 12px rgba(239, 68, 68, 0.25)' : '0 2px 8px rgba(99, 102, 241, 0.15)',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          {isSpeaking ? (
+                            <Volume2 size={18} color="#dc2626" />
+                          ) : (
+                            <Play size={18} color="#4f46e5" fill="#4f46e5" />
+                          )}
+                          <div>
+                            <div style={{ fontSize: 12, fontWeight: 800, color: isSpeaking ? '#991b1b' : '#3730a3' }}>
+                              {isSpeaking ? 'Speaking Executive Briefing...' : '🔊 Tap to Listen to Executive Briefing'}
+                            </div>
+                            <div style={{ fontSize: 10, color: isSpeaking ? '#b91c1c' : '#6366f1' }}>
+                              {isSpeaking ? 'Click to stop voice' : 'Audio overview of sales, team orders & stocks'}
+                            </div>
+                          </div>
+                        </div>
+                        <span style={{
+                          fontSize: 11,
+                          fontWeight: 800,
+                          padding: '4px 10px',
+                          borderRadius: 8,
+                          background: isSpeaking ? '#dc2626' : '#4f46e5',
+                          color: '#ffffff',
+                          flexShrink: 0
+                        }}>
+                          {isSpeaking ? 'Stop' : 'Play Voice'}
+                        </span>
+                      </div>
+                    )}
+
+                    {renderFormattedMessage(m.text)}
 
                     {/* Action Execution Success Card */}
                     {m.visuals?.actionResult && (

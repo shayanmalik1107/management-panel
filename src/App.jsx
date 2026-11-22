@@ -60,10 +60,14 @@ import TutorialsPage from './components/tutorials/TutorialsPage';
  * Redirects admin directly to company selection if not yet selected in session
  */
 function DashboardRouter() {
-  const { isAdmin, companyId } = useAuth();
+  const { isAdmin, companyId, currentUser } = useAuth();
 
   if (isAdmin) {
-    const isSelected = sessionStorage.getItem('company_selected') === 'true';
+    let isSelected = Boolean(currentUser?.uid && companyId && localStorage.getItem(`lamba_selected_company_${currentUser.uid}`) === companyId);
+    if (!isSelected && currentUser?.uid && companyId && sessionStorage.getItem('company_selected') === 'true') {
+      localStorage.setItem(`lamba_selected_company_${currentUser.uid}`, companyId);
+      isSelected = true;
+    }
     if (!isSelected || !companyId) {
       return <Navigate to="/select-company" replace />;
     }

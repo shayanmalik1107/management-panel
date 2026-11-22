@@ -85,7 +85,7 @@ export default function CustomerForm() {
         navigate(`/customers/${id}`);
       } else {
         const newId = await createCustomer(companyId, form, currentUser?.uid, userProfile?.name);
-        toast.success('Shop created successfully');
+        toast.success(!navigator.onLine ? 'Shop saved on this device. It will sync when internet returns.' : 'Shop created successfully');
         navigate(`/customers/${newId}`);
       }
     } catch (err) {

@@ -8,6 +8,32 @@ import nodemailer from 'nodemailer';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Automatically load environment variables from .env
+const envPath = path.resolve(__dirname, '../.env');
+if (fs.existsSync(envPath)) {
+  try {
+    const envContent = fs.readFileSync(envPath, 'utf-8');
+    envContent.split('\n').forEach(line => {
+      const trimmed = line.trim();
+      if (trimmed && !trimmed.startsWith('#')) {
+        const idx = trimmed.indexOf('=');
+        if (idx !== -1) {
+          const key = trimmed.slice(0, idx).trim();
+          let val = trimmed.slice(idx + 1).trim();
+          if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+            val = val.slice(1, -1);
+          }
+          if (!process.env[key]) {
+            process.env[key] = val;
+          }
+        }
+      }
+    });
+  } catch (err) {
+    console.warn('[OTP Server] Could not read .env file:', err.message);
+  }
+}
+
 const app = express();
 const PORT = process.env.OTP_PORT || 5199;
 
@@ -325,6 +351,16 @@ app.post('/api/otp/verify', (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`[OTP Server] Email OTP Verification Backend listening on http://localhost:${PORT}`);
 });
+
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.log(`[OTP Server] Port ${PORT} already in use. Reusing existing running instance.`);
+  } else {
+    console.error('[OTP Server] Error starting server:', err);
+  }
+});
+
+export { app };

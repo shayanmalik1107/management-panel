@@ -7,14 +7,20 @@ import { getProducts } from '../../services/productService';
 import { getCustomers, createCustomer } from '../../services/customerService';
 import { createOrder, getOrder, updateOrder } from '../../services/orderService';
 import { formatCurrency, getLocalDateString } from '../../utils/formatters';
+import { useOffline } from '../../contexts/OfflineContext';
+import { getCacheUpdatedAt } from '../../services/offlineStorage';
 
 export default function CreateOrder() {
   const { id } = useParams();
   const isEditMode = Boolean(id);
-  const { companyId, currentUser, userProfile, hasPermission, companyInfo, isAdmin, canEditOrderPrice } = useAuth();
-  const canEditPrice = canEditOrderPrice;
+  const { companyId, currentUser, userProfile, hasPermission, companyInfo, isAdmin, canEditOrderPrice, permissionsSyncedAt } = useAuth();
+  // Price overrides are sensitive: employees must be online to use a permission
+  // that could have been revoked remotely while this device was disconnected.
+  const canEditPrice = canEditOrderPrice && (isAdmin || isOnline);
   const navigate = useNavigate();
   const toast = useToast();
+  const { isOnline } = useOffline();
+  const [stockSnapshotTime, setStockSnapshotTime] = useState(null);
   
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -72,6 +78,12 @@ export default function CreateOrder() {
       ]);
       setCustomers(custs);
       setProducts(prods);
+      if (!navigator.onLine) {
+        const cachedAt = await getCacheUpdatedAt(`products_${companyId}`);
+        setStockSnapshotTime(cachedAt);
+      } else {
+        setStockSnapshotTime(Date.now());
+      }
 
       if (isEditMode && id) {
         if (!isAdmin) {
@@ -315,6 +327,13 @@ export default function CreateOrder() {
 
   return (
     <div>
+      {!isOnline && (
+        <div style={{ marginBottom: 14, padding: '11px 14px', borderRadius: 10, background: 'rgba(245, 158, 11, 0.10)', border: '1px solid rgba(245, 158, 11, 0.28)', color: 'var(--color-text-primary)' }}>
+          <strong>You're working offline.</strong> Orders are saved on this device and will sync with your admin's LAMBA panel when internet returns. Stock figures show the last synchronized quantity and may have changed. Sensitive permission-based actions require an internet connection.
+          {stockSnapshotTime && <div style={{ fontSize: 12, marginTop: 4 }}>Stock last synchronized: {new Date(stockSnapshotTime).toLocaleString()}</div>}
+          {permissionsSyncedAt && <div style={{ fontSize: 12, marginTop: 3 }}>Permissions last synchronized: {new Date(permissionsSyncedAt).toLocaleString()}. Admin changes made while you're offline apply after reconnection.</div>}
+        </div>
+      )}
       <div className="page-header">
         <div className="page-header-left">
           <div className="page-breadcrumb">
@@ -444,7 +463,7 @@ export default function CreateOrder() {
                           <div className="result-icon"><Package size={14} /></div>
                           <div className="result-text">
                             <div className="result-title">{p.name}</div>
-                            <div className="result-sub">Stock: {p.currentStock} | Price: {formatCurrency(p.salePrice, currency)}</div>
+                            <div className="result-sub">{isOnline ? 'Stock' : 'Last synced stock'}: {p.currentStock} | Price: {formatCurrency(p.salePrice, currency)}</div>
                           </div>
                           <button className="btn btn-ghost btn-sm"><Plus size={14} /> Add</button>
                         </div>
@@ -478,7 +497,7 @@ export default function CreateOrder() {
                           <tr key={idx}>
                             <td>
                               <div className="font-medium">{item.productName}</div>
-                              <div className="text-xs text-muted">Stock: {item.currentStock}</div>
+                              <div className="text-xs text-muted">{isOnline ? 'Stock' : 'Last synced stock'}: {item.currentStock}</div>
                               {item.returnedQty > 0 && (
                                 <div style={{ fontSize: '11px', color: 'var(--danger-600)', fontWeight: 600, marginTop: 2 }}>
                                   ({item.returnedQty} returned)
@@ -554,7 +573,7 @@ export default function CreateOrder() {
                           <div style={{ flex: 1, minWidth: 0, paddingRight: '8px' }}>
                             <div className="font-medium" style={{ fontSize: 'var(--font-size-base)', wordBreak: 'break-word' }}>{item.productName}</div>
                             <div className="text-xs text-muted" style={{ display: 'flex', gap: '8px', marginTop: '2px', flexWrap: 'wrap', alignItems: 'center' }}>
-                              <span>Stock: {item.currentStock}</span>
+                              <span>{isOnline ? 'Stock' : 'Last synced stock'}: {item.currentStock}</span>
                               <span>•</span>
                               {canEditPrice ? (
                                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>

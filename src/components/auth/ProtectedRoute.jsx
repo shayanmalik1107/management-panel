@@ -322,7 +322,11 @@ export function PublicRoute({ children }) {
       if (userProfile.accountStatus === 'pending_approval') {
         return <Navigate to="/payment-pending" replace />;
       }
-      const selected = sessionStorage.getItem('company_selected') === 'true';
+      let selected = Boolean(currentUser?.uid && userProfile.companyId && localStorage.getItem(`lamba_selected_company_${currentUser.uid}`) === userProfile.companyId);
+      if (!selected && currentUser?.uid && userProfile.companyId && sessionStorage.getItem('company_selected') === 'true') {
+        localStorage.setItem(`lamba_selected_company_${currentUser.uid}`, userProfile.companyId);
+        selected = true;
+      }
       return <Navigate to={selected ? "/dashboard" : "/select-company"} replace />;
     }
     return <Navigate to="/dashboard" replace />;

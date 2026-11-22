@@ -1,6 +1,6 @@
 // Offline Storage Service — Resilient IndexedDB with Persistent Storage API
 const DB_NAME = 'lamba_offline_db';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let dbPromise = null;
 
@@ -20,12 +20,18 @@ export function getDb() {
     request.onupgradeneeded = (event) => {
       const db = event.target.result;
 
-      // 1. Outbox store: Holds pending offline actions (orders, shops, products, payments)
-      if (!db.objectStoreNames.contains('outbox')) {
-        const outboxStore = db.createObjectStore('outbox', { keyPath: 'id' });
-        outboxStore.createIndex('companyId', 'companyId', { unique: false });
-        outboxStore.createIndex('createdAt', 'createdAt', { unique: false });
-        outboxStore.createIndex('actionType', 'actionType', { unique: false });
+      // 1. Outbox store: add indexes safely for both new and existing v1 installs.
+      const outboxStore = db.objectStoreNames.contains('outbox')
+        ? event.target.transaction.objectStore('outbox')
+        : db.createObjectStore('outbox', { keyPath: 'id' });
+      for (const [name, keyPath] of [
+        ['companyId', 'companyId'],
+        ['createdAt', 'createdAt'],
+        ['actionType', 'actionType'],
+        ['userId', 'userId'],
+        ['deviceId', 'deviceId'],
+      ]) {
+        if (!outboxStore.indexNames.contains(name)) outboxStore.createIndex(name, keyPath, { unique: false });
       }
 
       // 2. Cache store: Holds snapshot data (catalog, customers, recent orders) for offline browsing
@@ -75,6 +81,7 @@ export async function saveToOutbox(action) {
     
     const record = {
       id: action.id || `outbox_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+      deviceId: action.deviceId || getDeviceId(),
       actionType: action.actionType, // 'create_order', 'create_customer', 'create_product', 'create_payment'
       companyId: action.companyId,
       userId: action.userId,
@@ -86,8 +93,11 @@ export async function saveToOutbox(action) {
     };
 
     const request = store.put(record);
-    request.onsuccess = () => resolve(record);
-    request.onerror = (e) => reject(e.target.error);
+    request.onsuccess = () => { /* wait for transaction commit before confirming local save */ };
+    request.onerror = (event) => reject(event.target.error);
+    tx.oncomplete = () => resolve(record);
+    tx.onerror = () => reject(tx.error || new Error('Could not commit offline action to local storage.'));
+    tx.onabort = () => reject(tx.error || new Error('Offline action storage was interrupted.'));
   });
 }
 
@@ -107,7 +117,7 @@ export async function getOutboxItems(companyId) {
         items = items.filter(item => item.companyId === companyId);
       }
       // Sort chronologically (oldest first for FIFO processing)
-      items.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+      items.sort((a, b) => ((a.createdAt || 0) - (b.createdAt || 0)) || String(a.id).localeCompare(String(b.id)));
       resolve(items);
     };
     request.onerror = (e) => reject(e.target.error);
@@ -222,5 +232,44 @@ export async function addToCachedCollection(companyId, collectionName, newItem) 
   } catch (err) {
     console.warn(`[Offline Cache] Error updating cached collection ${collectionName}:`, err);
     return [];
+  }
+}
+
+
+// Stable per-browser installation identifier. It is metadata, not an auth secret.
+export function getDeviceId() {
+  try {
+    let id = localStorage.getItem('lamba_device_id');
+    if (!id) {
+      id = typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `device_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      localStorage.setItem('lamba_device_id', id);
+    }
+    return id;
+  } catch (_) {
+    return 'device-session';
+  }
+}
+
+export function getActiveCachedUserId() {
+  try {
+    const session = JSON.parse(localStorage.getItem('lamba_auth_session') || 'null');
+    return session?.currentUser?.uid || null;
+  } catch (_) {
+    return null;
+  }
+}
+
+export async function getCacheUpdatedAt(key) {
+  try {
+    const db = await getDb();
+    return await new Promise((resolve, reject) => {
+      const request = db.transaction('cache', 'readonly').objectStore('cache').get(key);
+      request.onsuccess = () => resolve(request.result?.updatedAt || null);
+      request.onerror = (event) => reject(event.target.error);
+    });
+  } catch (_) {
+    return null;
   }
 }

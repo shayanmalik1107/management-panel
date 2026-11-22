@@ -695,6 +695,10 @@ export async function handleGoogleRedirectResult() {
 export async function logout() {
   try {
     sessionStorage.clear();
+    const uid = auth.currentUser?.uid;
+    localStorage.setItem('lamba_explicit_logout', '1');
+    localStorage.removeItem('lamba_auth_session');
+    if (uid) localStorage.removeItem(`lamba_selected_company_${uid}`);
   } catch (e) { }
   await signOut(auth);
 }

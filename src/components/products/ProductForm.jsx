@@ -305,12 +305,12 @@ export default function ProductForm() {
       };
 
       if (isEditing) {
-        await updateProduct(companyId, id, submitData, currentUser.uid, userProfile?.name || 'User');
-        toast.success('Product updated successfully');
+        const result = await updateProduct(companyId, id, submitData, currentUser.uid, userProfile?.name || 'User');
+        toast.success(result?.isOffline ? 'Product update saved on this device. It will sync when internet returns.' : 'Product updated successfully');
         navigate(`/products/${id}`);
       } else {
         const newId = await createProduct(companyId, submitData, currentUser.uid, userProfile?.name || 'User');
-        toast.success('Product created successfully');
+        toast.success(!navigator.onLine ? 'Product saved on this device. Employees will receive it after cloud sync.' : 'Product created successfully');
         navigate(`/products/${newId}`);
       }
     } catch (err) {

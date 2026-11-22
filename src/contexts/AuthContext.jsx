@@ -63,7 +63,8 @@ export function AuthProvider({ children }) {
 
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       // If user is null but we are offline and have a cached session, preserve it!
-      if (!user && !navigator.onLine && cached) {
+      const explicitLogout = localStorage.getItem('lamba_explicit_logout') === '1';
+      if (!user && !navigator.onLine && cached && !explicitLogout) {
         console.log('[AuthContext] Offline mode: retaining cached session.');
         setLoading(false);
         return;
@@ -86,7 +87,7 @@ export function AuthProvider({ children }) {
         const userRef = ref(database, `users/${user.uid}`);
         const unsubUser = onValue(userRef, (snapshot) => {
           if (snapshot.exists()) {
-            const profile = { uid: user.uid, ...snapshot.val() };
+            const profile = { uid: user.uid, ...snapshot.val(), permissionsSyncedAt: Date.now() };
             setUserProfile(profile);
 
             const companyId = profile.companyId;
@@ -130,12 +131,11 @@ export function AuthProvider({ children }) {
         });
         userUnsubRef.current = unsubUser;
       } else {
-        // User logged out
-        if (navigator.onLine) {
-          setUserProfile(null);
-          setCompanyInfo(null);
-          localStorage.removeItem('lamba_auth_session');
-        }
+        // Explicit logout must clear the offline shortcut even without internet.
+        setUserProfile(null);
+        setCompanyInfo(null);
+        localStorage.removeItem('lamba_auth_session');
+        localStorage.removeItem('lamba_explicit_logout');
         setLoading(false);
       }
     });
@@ -175,6 +175,7 @@ export function AuthProvider({ children }) {
     isCompanyPending,
     hasPermission,
     canEditOrderPrice,
+    permissionsSyncedAt: userProfile?.permissionsSyncedAt || cached?.userProfile?.permissionsSyncedAt || null,
     loading,
   };
 

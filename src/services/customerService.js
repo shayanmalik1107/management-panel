@@ -2,7 +2,7 @@
 import { ref, get, update } from 'firebase/database';
 import { database } from '../firebase';
 import { generateId } from '../utils/codeGenerator';
-import { saveToOutbox, addToCachedCollection, cacheCollection, getCachedCollection, getOutboxItems } from './offlineStorage';
+import { saveToOutbox, addToCachedCollection, cacheCollection, getCachedCollection, getOutboxItems, getActiveCachedUserId } from './offlineStorage';
 
 export async function createCustomer(companyId, customerData, userId, userName) {
   const customerId = generateId('cust');
@@ -75,7 +75,7 @@ async function createCustomerOffline(companyId, customerId, customer, userId, us
     description: `Shop "${customer.shopName}"`
   });
 
-  await addToCachedCollection(companyId, 'customers', localCustomer);
+  // Pending customers remain in the creator's outbox until cloud acknowledgement.
   return customerId;
 }
 
@@ -109,8 +109,14 @@ export async function updateCustomer(companyId, customerId, customerData, userId
 export async function getCustomers(companyId) {
   // If offline, return cached customers merged with pending outbox customers
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
-    const cached = await getCachedCollection(companyId, 'customers');
-    return cached;
+    const cached = (await getCachedCollection(companyId, 'customers')).filter(customer => !customer.isPendingSync);
+    const uid = getActiveCachedUserId();
+    const pending = (await getOutboxItems(companyId))
+      .filter(item => item.userId === uid && item.actionType === 'create_customer' && item.payload?.customer)
+      .map(item => ({ ...item.payload.customer, id: item.payload.customerId || item.payload.customer.id, isPendingSync: true }));
+    const map = new Map(cached.map(customer => [customer.id, customer]));
+    pending.forEach(customer => map.set(customer.id, customer));
+    return Array.from(map.values());
   }
 
   try {
@@ -123,9 +129,10 @@ export async function getCustomers(companyId) {
     }
 
     // Merge pending outbox items
+    const activeUid = getActiveCachedUserId();
     const pendingOutbox = await getOutboxItems(companyId);
     const pendingCusts = pendingOutbox
-      .filter(item => item.actionType === 'create_customer' && item.payload?.customer)
+      .filter(item => item.userId === activeUid && item.actionType === 'create_customer' && item.payload?.customer)
       .map(item => ({
         ...item.payload.customer,
         id: item.payload.customerId || item.payload.customer.id,
@@ -137,11 +144,18 @@ export async function getCustomers(companyId) {
     pendingCusts.forEach(c => custMap.set(c.id, c));
 
     const merged = Array.from(custMap.values());
-    await cacheCollection(companyId, 'customers', merged);
+    await cacheCollection(companyId, 'customers', customers);
     return merged;
   } catch (err) {
     console.warn('[Customer Service] Failed to fetch customers from server, returning cache:', err);
-    return getCachedCollection(companyId, 'customers');
+    const cached = (await getCachedCollection(companyId, 'customers')).filter(customer => !customer.isPendingSync);
+    const uid = getActiveCachedUserId();
+    const pending = (await getOutboxItems(companyId))
+      .filter(item => item.userId === uid && item.actionType === 'create_customer' && item.payload?.customer)
+      .map(item => ({ ...item.payload.customer, id: item.payload.customerId || item.payload.customer.id, isPendingSync: true }));
+    const map = new Map(cached.map(customer => [customer.id, customer]));
+    pending.forEach(customer => map.set(customer.id, customer));
+    return Array.from(map.values());
   }
 }
 
@@ -162,16 +176,17 @@ export async function getCustomer(companyId, customerId) {
 }
 
 async function getCustomerOffline(companyId, customerId) {
+  const uid = getActiveCachedUserId();
   const outboxItems = await getOutboxItems(companyId);
   const foundOutbox = outboxItems.find(
-    i => i.actionType === 'create_customer' && 
+    i => i.userId === uid && i.actionType === 'create_customer' && 
          (i.payload?.customerId === customerId || i.payload?.customer?.id === customerId)
   );
   if (foundOutbox && foundOutbox.payload?.customer) {
     return { ...foundOutbox.payload.customer, id: customerId, isPendingSync: true };
   }
 
-  const cached = await getCachedCollection(companyId, 'customers');
+  const cached = (await getCachedCollection(companyId, 'customers')).filter(customer => !customer.isPendingSync);
   return cached.find(c => c.id === customerId) || null;
 }
 

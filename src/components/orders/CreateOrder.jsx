@@ -14,12 +14,13 @@ export default function CreateOrder() {
   const { id } = useParams();
   const isEditMode = Boolean(id);
   const { companyId, currentUser, userProfile, hasPermission, companyInfo, isAdmin, canEditOrderPrice, permissionsSyncedAt } = useAuth();
-  // Price overrides are sensitive: employees must be online to use a permission
-  // that could have been revoked remotely while this device was disconnected.
-  const canEditPrice = canEditOrderPrice && (isAdmin || isOnline);
+  const { isOnline } = useOffline();
   const navigate = useNavigate();
   const toast = useToast();
-  const { isOnline } = useOffline();
+
+  // Price overrides are sensitive: employees must be online to use a permission
+  // that could have been revoked remotely while this device was disconnected.
+  const canEditPrice = Boolean(canEditOrderPrice) && (Boolean(isAdmin) || Boolean(isOnline));
   const [stockSnapshotTime, setStockSnapshotTime] = useState(null);
   
   const [loading, setLoading] = useState(false);

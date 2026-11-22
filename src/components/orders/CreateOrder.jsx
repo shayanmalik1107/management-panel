@@ -252,6 +252,7 @@ export default function CreateOrder() {
         );
         toast.success(`Order ${existingOrderNumber} updated successfully`);
         navigate(`/orders/${id}`);
+      } else {
         const result = await createOrder(
           companyId, 
           orderData, 
@@ -267,6 +268,7 @@ export default function CreateOrder() {
       }
     } catch (err) {
       toast.error(err.message || 'Failed to save order');
+    } finally {
       setLoading(false);
     }
   };

@@ -653,7 +653,7 @@ async function getOrderOffline(companyId, orderId) {
   const activeUid = getActiveCachedUserId();
   const outboxItems = await getOutboxItems(companyId);
   const foundOutbox = outboxItems.find(
-    i => i.userId === activeUid && i.actionType === 'create_order' && 
+    i => (!activeUid || i.userId === activeUid) && i.actionType === 'create_order' && 
          (i.payload?.orderId === orderId || i.payload?.order?.id === orderId || i.payload?.orderNumber === orderId)
   );
   if (foundOutbox && foundOutbox.payload?.order) {

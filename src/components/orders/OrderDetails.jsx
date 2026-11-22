@@ -45,7 +45,7 @@ export default function OrderDetails() {
       }
       
       // Access check
-      if (!isAdmin && data.employeeId !== currentUser.uid && data.createdBy !== currentUser.uid) {
+      if (!isAdmin && currentUser?.uid && data.employeeId !== currentUser.uid && data.createdBy !== currentUser.uid) {
         toast.error('You do not have permission to view this order');
         navigate('/orders');
         return;

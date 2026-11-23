@@ -1,0 +1,50 @@
+import { useState, useEffect } from 'react';
+import { Outlet } from 'react-router-dom';
+import Sidebar from './Sidebar';
+import Navbar from './Navbar';
+import MobileBottomNav from './MobileBottomNav';
+import TrialCountdownBanner from './TrialCountdownBanner';
+import LambaVoiceAssistant from '../ai/LambaVoiceAssistant';
+
+export default function AppLayout() {
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Close mobile sidebar on resize to desktop
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 768) {
+        setMobileOpen(false);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  return (
+    <div className="app-layout">
+      <Sidebar
+        collapsed={sidebarCollapsed}
+        onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+        mobileOpen={mobileOpen}
+        onMobileClose={() => setMobileOpen(false)}
+      />
+      <div className={`main-content ${sidebarCollapsed ? 'collapsed' : ''}`}>
+        <TrialCountdownBanner />
+        <Navbar
+          onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
+          onToggleMobile={() => setMobileOpen(!mobileOpen)}
+        />
+        <div className="page-content">
+          <Outlet />
+        </div>
+      </div>
+
+      {/* Mobile Bottom Navigation Bar */}
+      <MobileBottomNav onOpenMenu={() => setMobileOpen(true)} />
+
+      {/* Floating AI Voice & Visual Assistant */}
+      <LambaVoiceAssistant />
+    </div>
+  );
+}

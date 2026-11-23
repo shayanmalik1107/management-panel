@@ -32,3 +32,10 @@ dist-ssr
 brag-output/
 .agents/
 skills-lock.json
+
+# Mobile build artifacts
+**/android/.gradle
+**/android/build
+**/android/app/build
+**/android/local.properties
+/lamba-management.apk

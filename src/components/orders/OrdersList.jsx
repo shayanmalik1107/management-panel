@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Filter, Edit2, Trash2, RotateCcw, Store, User, CheckSquare, Square, FileText, Loader2, Download } from 'lucide-react';
+import { Plus, Search, Filter, Edit2, Trash2, RotateCcw, Store, User, CheckSquare, Square, FileText, Loader2, Download, AlertTriangle } from 'lucide-react';
 import { ref, onValue } from 'firebase/database';
 import { database } from '../../firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
-import { deleteOrder } from '../../services/orderService';
+import { deleteOrder, listenPendingRemovedOrders, approveRemovedEmployeeOrder, rejectRemovedEmployeeOrder } from '../../services/orderService';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { exportHtmlToPDF, generateSummaryHTML, exportOrderInvoiceToPDF, exportMultipleInvoicesToPDF } from '../../utils/pdfExport';
 import OrderReturnModal from './OrderReturnModal';
@@ -36,6 +36,42 @@ export default function OrdersList() {
   const [exportingPdfType, setExportingPdfType] = useState(null); // 'checklist' | 'invoice' | orderId | null
 
   const [selectedOrderForReturn, setSelectedOrderForReturn] = useState(null);
+  const [pendingRemovedOrders, setPendingRemovedOrders] = useState([]);
+  const [actionLoadingId, setActionLoadingId] = useState(null);
+
+  // Listen for orders submitted offline by removed employees requiring Admin approval
+  useEffect(() => {
+    if (!isAdmin || !companyId) return;
+    const unsub = listenPendingRemovedOrders(companyId, (list) => {
+      setPendingRemovedOrders(list);
+    });
+    return () => unsub();
+  }, [isAdmin, companyId]);
+
+  const handleAcceptRemovedOrder = async (orderId) => {
+    setActionLoadingId(orderId);
+    try {
+      const res = await approveRemovedEmployeeOrder(companyId, orderId, currentUser?.uid, userProfile?.name);
+      toast.success(`Order #${res.orderNumber} approved and added to active orders!`);
+    } catch (err) {
+      toast.error(err.message || 'Failed to approve order');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleRejectRemovedOrder = async (orderId) => {
+    if (!window.confirm('Are you sure you want to permanently reject and delete this order? It will not be added to your system.')) return;
+    setActionLoadingId(orderId);
+    try {
+      const res = await rejectRemovedEmployeeOrder(companyId, orderId, currentUser?.uid, userProfile?.name);
+      toast.success(`Order #${res.orderNumber} rejected and deleted.`);
+    } catch (err) {
+      toast.error(err.message || 'Failed to reject order');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
 
   const currency = companyInfo?.currency || 'Rs';
   const accountDisplayName = userProfile?.name || currentUser?.displayName || companyInfo?.owner || companyInfo?.companyName || companyInfo?.name || 'COMPANY';
@@ -470,6 +506,71 @@ export default function OrdersList() {
           )}
         </div>
       </div>
+
+      {/* Orders Created Post-Removal by Removed Staff — Admin Approval Banner */}
+      {isAdmin && pendingRemovedOrders.length > 0 && (
+        <div style={{
+          background: '#fffbeb',
+          border: '1px solid #fcd34d',
+          borderRadius: 14,
+          padding: 16,
+          marginBottom: 20,
+          boxShadow: '0 4px 14px rgba(245, 158, 11, 0.12)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#b45309', fontWeight: 800, fontSize: 15, marginBottom: 6 }}>
+            <AlertTriangle size={18} /> Orders from Removed Staff Requiring Approval ({pendingRemovedOrders.length})
+          </div>
+          <p style={{ fontSize: 13, color: '#92400e', margin: '0 0 14px 0', lineHeight: 1.5 }}>
+            The following order(s) were submitted offline by employees <strong>after they were removed from your company workspace</strong>. Review each order to either <strong>Accept</strong> (officially adds to active orders, deducts inventory stock & updates customer ledger) or <strong>Reject</strong> (permanently discards the order from database).
+          </p>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {pendingRemovedOrders.map(order => (
+              <div key={order.id} style={{
+                background: '#ffffff',
+                border: '1px solid #fef08a',
+                borderRadius: 10,
+                padding: '12px 16px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: 12
+              }}>
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: 14, color: '#0f172a' }}>
+                    Order #{order.orderNumber} • <span style={{ color: '#2563eb' }}>{formatCurrency(order.grandTotal, currency)}</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: '#64748b', marginTop: 3 }}>
+                    Customer: <strong>{order.customerName || 'Customer'}</strong> • Submitted by: <span style={{ color: '#dc2626', fontWeight: 700 }}>{order.employeeName}</span> (Created: {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    disabled={actionLoadingId === order.id}
+                    style={{ background: '#16a34a', color: '#ffffff', fontWeight: 700, border: 'none', padding: '6px 14px', borderRadius: 8, cursor: 'pointer' }}
+                    onClick={() => handleAcceptRemovedOrder(order.id)}
+                  >
+                    {actionLoadingId === order.id ? 'Processing...' : '✓ Accept Order'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    disabled={actionLoadingId === order.id}
+                    style={{ background: '#dc2626', color: '#ffffff', fontWeight: 700, border: 'none', padding: '6px 14px', borderRadius: 8, cursor: 'pointer' }}
+                    onClick={() => handleRejectRemovedOrder(order.id)}
+                  >
+                    {actionLoadingId === order.id ? 'Processing...' : '✕ Reject & Delete'}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Collapsible Order Filters Panel */}
       <FilterPanel

@@ -106,10 +106,18 @@ export default function EmployeesList() {
     if (!window.confirm(`Are you sure you want to remove ${emp.name || emp.email} from your company?`)) return;
 
     try {
+      const removalTime = Date.now();
       const updates = {};
       updates[`companies/${companyId}/employees/${emp.uid}`] = null;
+      updates[`companies/${companyId}/removedEmployees/${emp.uid}`] = {
+        uid: emp.uid,
+        name: emp.name || emp.email || 'Employee',
+        email: emp.email || '',
+        removedAt: removalTime,
+      };
       updates[`users/${emp.uid}/companyId`] = null;
       updates[`users/${emp.uid}/status`] = 'disabled';
+      updates[`users/${emp.uid}/removedAt`] = removalTime;
       await update(ref(database), updates);
       toast.success(`Employee ${emp.name || emp.email} removed from workspace`);
     } catch (err) {

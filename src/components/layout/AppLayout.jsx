@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
+import MobileBottomNav from './MobileBottomNav';
 import TrialCountdownBanner from './TrialCountdownBanner';
 import LambaVoiceAssistant from '../ai/LambaVoiceAssistant';
 
@@ -38,6 +39,9 @@ export default function AppLayout() {
           <Outlet />
         </div>
       </div>
+
+      {/* Mobile Bottom Navigation Bar */}
+      <MobileBottomNav onOpenMenu={() => setMobileOpen(true)} />
 
       {/* Floating AI Voice & Visual Assistant */}
       <LambaVoiceAssistant />

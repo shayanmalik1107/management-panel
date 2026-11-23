@@ -109,6 +109,49 @@ async function applyOfflineOrder(item) {
     company.activities ||= {};
     company.notifications ||= {};
 
+    // If the creator of this order was removed prior to order creation, route to Admin Review
+    const removedInfo = company.removedEmployees?.[userId];
+    const orderCreatedAt = Number(order.createdAt) || 0;
+    const isPostRemovalOrder = Boolean(removedInfo?.removedAt && orderCreatedAt >= removedInfo.removedAt);
+
+    if (isPostRemovalOrder) {
+      company.pendingRemovedEmployeeOrders ||= {};
+      company.pendingRemovedEmployeeOrders[orderId] = {
+        ...order,
+        id: orderId,
+        orderId,
+        orderNumber,
+        customerUpdates: customerUpdates || null,
+        activity: activity || null,
+        isPendingSync: false,
+        requiresAdminApproval: true,
+        reviewStatus: 'pending',
+        submittedAt: now,
+        employeeRemovedAt: removedInfo.removedAt,
+        employeeName: removedInfo.name || userName || 'Removed Employee',
+      };
+
+      const notifId = `notif_rev_${orderId}`;
+      company.notifications ||= {};
+      company.notifications[notifId] = {
+        id: notifId,
+        type: 'removed_employee_order_review',
+        targetRole: 'admin',
+        title: '⚠️ Order Created After Employee Removal',
+        message: `Order #${orderNumber} (${order.currency || 'Rs'} ${(order.grandTotal || 0).toLocaleString()}) was created offline by removed employee "${removedInfo.name || userName}" AFTER they were removed. Action required: Accept or Reject.`,
+        orderId,
+        orderNumber,
+        employeeId: userId,
+        employeeName: removedInfo.name || userName,
+        timestamp: now,
+        read: false,
+        reviewStatus: 'pending',
+      };
+
+      company.processedOfflineOrders[orderId] = { processedAt: now, deviceId: item.deviceId || null, userId, routedToReview: true };
+      return company;
+    }
+
     const cloudOrder = { ...order, isPendingSync: false, syncedAt: now };
     company.orders[orderId] = cloudOrder;
 

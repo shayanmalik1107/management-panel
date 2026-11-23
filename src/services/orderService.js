@@ -779,6 +779,182 @@ export async function processOrderReturn(companyId, orderId, returnItems, reason
   return { returnId, totalReturnAmount };
 }
 
+/**
+ * Real-time listener for orders created offline by removed employees requiring Admin approval
+ */
+export function listenPendingRemovedOrders(companyId, callback) {
+  if (!companyId) return () => {};
+  const pendingRef = ref(database, `companies/${companyId}/pendingRemovedEmployeeOrders`);
+  return onValue(pendingRef, (snap) => {
+    if (!snap.exists()) {
+      callback([]);
+      return;
+    }
+    const list = [];
+    snap.forEach((child) => {
+      const val = child.val();
+      if (val) {
+        list.push({ id: child.key, ...val });
+      }
+    });
+    list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    callback(list);
+  }, (err) => {
+    console.warn('[orderService] Error listening to pending removed employee orders:', err);
+    callback([]);
+  });
+}
+
+/**
+ * Admin accepts order created offline by a removed employee:
+ * Moves it to active orders, deducts inventory stock, updates customer ledger.
+ */
+export async function approveRemovedEmployeeOrder(companyId, orderId, adminId, adminName) {
+  const companyRef = ref(database, `companies/${companyId}`);
+  const now = Date.now();
+  let approvedOrderNumber = '';
+
+  await runTransaction(companyRef, (company) => {
+    if (!company) return;
+    const pending = company.pendingRemovedEmployeeOrders?.[orderId];
+    if (!pending) return company;
+
+    approvedOrderNumber = pending.orderNumber || orderId;
+    company.orders ||= {};
+    company.products ||= {};
+    company.stockMovements ||= {};
+    company.activities ||= {};
+    company.notifications ||= {};
+
+    // Move to active orders
+    const approvedOrder = {
+      ...pending,
+      requiresAdminApproval: false,
+      reviewStatus: 'approved',
+      approvedBy: adminName || 'Admin',
+      approvedById: adminId || '',
+      approvedAt: now,
+    };
+    company.orders[orderId] = approvedOrder;
+
+    // Deduct stock
+    if (approvedOrder.status !== 'draft') {
+      const items = Array.isArray(approvedOrder.items)
+        ? approvedOrder.items
+        : Object.values(approvedOrder.items || {});
+      for (const line of items) {
+        if (!line?.productId) continue;
+        const qty = Number(line.quantity) || 0;
+        const prod = company.products[line.productId];
+        if (prod) {
+          prod.currentStock = (Number(prod.currentStock) || 0) - qty;
+          const movementId = `sale_${orderId}_${line.productId}`;
+          company.stockMovements[movementId] = {
+            id: movementId,
+            type: 'sale',
+            productId: line.productId,
+            productName: prod.name || line.productName || 'Product',
+            quantity: -qty,
+            referenceId: orderId,
+            referenceType: 'order',
+            referenceNumber: approvedOrderNumber,
+            createdBy: adminId || '',
+            createdAt: now,
+          };
+        }
+      }
+
+      // Update customer balance if applicable
+      const custId = approvedOrder.customerId || approvedOrder.customerUpdates?.customerId;
+      if (custId && company.customers?.[custId]) {
+        const cust = company.customers[custId];
+        const balChange = Number(approvedOrder.customerUpdates?.balanceChange ?? (approvedOrder.paymentType === 'cash' ? 0 : approvedOrder.grandTotal)) || 0;
+        cust.currentBalance = (Number(cust.currentBalance) || 0) + balChange;
+        cust.totalOrders = (Number(cust.totalOrders) || 0) + 1;
+        cust.totalSales = (Number(cust.totalSales) || 0) + (Number(approvedOrder.grandTotal) || 0);
+        cust.lastOrderDate = now;
+      }
+    }
+
+    // Activity log
+    const actId = generateId('act');
+    company.activities[actId] = {
+      id: actId,
+      userId: adminId || '',
+      userName: adminName || 'Admin',
+      action: `${adminName || 'Admin'} accepted post-removal offline order #${approvedOrderNumber}`,
+      entityType: 'order',
+      entityId: orderId,
+      timestamp: now,
+    };
+
+    // Remove from pending
+    delete company.pendingRemovedEmployeeOrders[orderId];
+
+    // Update notification status if exists
+    if (company.notifications) {
+      for (const notif of Object.values(company.notifications)) {
+        if (notif?.orderId === orderId) {
+          notif.reviewStatus = 'accepted';
+          notif.read = true;
+        }
+      }
+    }
+
+    return company;
+  });
+
+  return { success: true, orderNumber: approvedOrderNumber };
+}
+
+/**
+ * Admin rejects order created offline by a removed employee:
+ * Deletes it permanently from DB without affecting stock or customer balances.
+ */
+export async function rejectRemovedEmployeeOrder(companyId, orderId, adminId, adminName) {
+  const companyRef = ref(database, `companies/${companyId}`);
+  const now = Date.now();
+  let rejectedOrderNumber = '';
+
+  await runTransaction(companyRef, (company) => {
+    if (!company) return;
+    const pending = company.pendingRemovedEmployeeOrders?.[orderId];
+    if (!pending) return company;
+
+    rejectedOrderNumber = pending.orderNumber || orderId;
+
+    // Delete completely from pending
+    delete company.pendingRemovedEmployeeOrders[orderId];
+
+    // Activity log
+    company.activities ||= {};
+    const actId = generateId('act');
+    company.activities[actId] = {
+      id: actId,
+      userId: adminId || '',
+      userName: adminName || 'Admin',
+      action: `${adminName || 'Admin'} rejected post-removal offline order #${rejectedOrderNumber}`,
+      entityType: 'order',
+      entityId: orderId,
+      timestamp: now,
+    };
+
+    // Update notification status if exists
+    if (company.notifications) {
+      for (const notif of Object.values(company.notifications)) {
+        if (notif?.orderId === orderId) {
+          notif.reviewStatus = 'rejected';
+          notif.read = true;
+        }
+      }
+    }
+
+    return company;
+  });
+
+  return { success: true, orderNumber: rejectedOrderNumber };
+}
+
 function calculatePaymentStatus(grandTotal, amountPaid) {
   if (!grandTotal || grandTotal <= 0) return 'paid';
   if (!amountPaid || amountPaid <= 0) return 'unpaid';

@@ -398,6 +398,9 @@ export default function Navbar({ onToggleSidebar, onToggleMobile }) {
                         if (!notif.read) {
                           update(ref(database, `companies/${companyId}/notifications/${notif.id}`), { read: true });
                         }
+                        if (notif.type === 'removed_employee_order_review') {
+                          navigate('/orders');
+                        }
                         setShowNotifications(false);
                       }}
                     >
@@ -405,7 +408,20 @@ export default function Navbar({ onToggleSidebar, onToggleMobile }) {
                         <Bell size={14} />
                       </div>
                       <div className="notif-content">
-                        <div className="notif-message">{notif.message}</div>
+                        <div className="notif-message">
+                          {notif.type === 'removed_employee_order_review' ? (
+                            <span style={{ color: '#b45309', fontWeight: 600 }}>⚠️ {notif.message}</span>
+                          ) : (
+                            notif.message
+                          )}
+                        </div>
+                        {notif.type === 'removed_employee_order_review' && notif.reviewStatus === 'pending' && (
+                          <div style={{ marginTop: 4 }}>
+                            <span style={{ fontSize: 11, background: '#fef3c7', color: '#92400e', padding: '2px 8px', borderRadius: 6, fontWeight: 700 }}>
+                              Tap to Review in Orders →
+                            </span>
+                          </div>
+                        )}
                         <div className="notif-time">{timeAgo(notif.timestamp)}</div>
                       </div>
                     </div>

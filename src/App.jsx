@@ -17,6 +17,7 @@ import PaymentPendingPage from './components/auth/PaymentPendingPage';
 import ControlPanelPage from './components/controlPanel/ControlPanelPage';
 import BillingPage from './components/billing/BillingPage';
 import UpgradeCelebrationModal from './components/common/UpgradeCelebrationModal';
+import ErrorBoundary from './components/common/ErrorBoundary';
 
 // Dashboards
 import AdminDashboard from './components/dashboard/AdminDashboard';
@@ -80,11 +81,12 @@ function DashboardRouter() {
 
 function App() {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <OfflineProvider>
-        <UpgradeCelebrationModal />
-        <Router>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <AuthProvider>
+          <OfflineProvider>
+          <UpgradeCelebrationModal />
+          <Router>
           <Routes>
           {/* Public / Auth Routes */}
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
@@ -192,6 +194,7 @@ function App() {
         </OfflineProvider>
       </AuthProvider>
     </ThemeProvider>
+    </ErrorBoundary>
   );
 }
 

@@ -3735,6 +3735,59 @@ body.dark {
   background-color: #1f293d;
 }
 
+/* Dark Search Results Dropdown */
+[data-theme="dark"] .search-results {
+  background: #111827 !important;
+  border-color: #1f293d !important;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.7) !important;
+}
+
+[data-theme="dark"] .search-results-section {
+  border-bottom-color: #1f293d !important;
+}
+
+[data-theme="dark"] .search-results-label {
+  color: #64748b !important;
+}
+
+[data-theme="dark"] .search-result-item {
+  color: #f1f5f9 !important;
+}
+
+[data-theme="dark"] .search-result-item:hover {
+  background: #1e293b !important;
+}
+
+[data-theme="dark"] .search-result-item .result-icon {
+  background: #1e293b !important;
+  color: #818cf8 !important;
+}
+
+[data-theme="dark"] .search-result-item .result-title {
+  color: #f8fafc !important;
+}
+
+[data-theme="dark"] .search-result-item .result-sub {
+  color: #94a3b8 !important;
+}
+
+/* Dark Order & Purchase Items (Mobile Cards) */
+[data-theme="dark"] .order-items-mobile > div,
+[data-theme="dark"] .purchase-items-mobile > div,
+[data-theme="dark"] .order-item-card,
+[data-theme="dark"] .purchase-item-card {
+  background: #111827 !important;
+  border-color: #1f293d !important;
+  color: #f8fafc !important;
+}
+
+[data-theme="dark"] .order-items-mobile .font-medium,
+[data-theme="dark"] .purchase-items-mobile .font-medium,
+[data-theme="dark"] .order-item-card .font-medium,
+[data-theme="dark"] .purchase-item-card .font-medium {
+  color: #f8fafc !important;
+}
+
 [data-theme="dark"] .notification-panel {
   background-color: #111827;
   border-color: #1f293d;

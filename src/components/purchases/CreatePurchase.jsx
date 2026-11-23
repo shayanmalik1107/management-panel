@@ -634,9 +634,10 @@ export default function CreatePurchase() {
                       return (
                         <div
                           key={idx}
+                          className="purchase-item-card"
                           style={{
-                            background: 'white',
-                            border: '1px solid var(--gray-200)',
+                            background: 'var(--color-bg-card, var(--gray-25, #ffffff))',
+                            border: '1px solid var(--border)',
                             borderRadius: 'var(--radius-md)',
                             padding: 'var(--space-4)',
                             boxShadow: 'var(--shadow-xs)'
@@ -645,7 +646,7 @@ export default function CreatePurchase() {
                           {/* Item Header */}
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-3)', flexWrap: 'wrap', gap: '8px' }}>
                             <div>
-                              <span style={{ fontWeight: 700, fontSize: 'var(--font-size-base)', color: 'var(--gray-900)' }}>
+                              <span style={{ fontWeight: 700, fontSize: 'var(--font-size-base)', color: 'var(--color-text-main, var(--gray-900))' }}>
                                 {idx + 1}. {item.productName}
                               </span>
                               {item.isNewDraft && <span className="badge badge-blue ml-2" style={{ fontSize: '10px' }}>New</span>}

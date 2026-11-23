@@ -1,5 +1,5 @@
 // Order Service — Full order lifecycle with stock management
-import { ref, get, update, runTransaction } from 'firebase/database';
+import { ref, get, update, runTransaction, onValue } from 'firebase/database';
 import { database } from '../firebase';
 import { generateId } from '../utils/codeGenerator';
 import { generateSequentialNumber } from '../utils/formatters';

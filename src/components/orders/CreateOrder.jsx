@@ -574,11 +574,12 @@ export default function CreateOrder() {
                     {orderItems.map((item, idx) => (
                       <div 
                         key={idx} 
+                        className="order-item-card"
                         style={{ 
                           padding: 'var(--space-3)', 
                           border: 'var(--border)', 
                           borderRadius: 'var(--radius-md)', 
-                          background: 'white',
+                          background: 'var(--color-bg-card, var(--gray-25, #ffffff))',
                           display: 'flex',
                           flexDirection: 'column',
                           gap: 'var(--space-2)'
@@ -619,7 +620,7 @@ export default function CreateOrder() {
                           </button>
                         </div>
 
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 'var(--space-2)', borderTop: '1px solid var(--gray-100)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 'var(--space-2)', borderTop: '1px solid var(--border)' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <span className="text-xs text-muted font-medium">Qty:</span>
                             <input 

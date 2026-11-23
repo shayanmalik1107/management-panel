@@ -109,6 +109,7 @@ export default function EmployeesList() {
       const updates = {};
       updates[`companies/${companyId}/employees/${emp.uid}`] = null;
       updates[`users/${emp.uid}/companyId`] = null;
+      updates[`users/${emp.uid}/status`] = 'disabled';
       await update(ref(database), updates);
       toast.success(`Employee ${emp.name || emp.email} removed from workspace`);
     } catch (err) {

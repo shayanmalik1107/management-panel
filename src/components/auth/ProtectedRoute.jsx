@@ -43,6 +43,25 @@ export function ProtectedRoute({ children }) {
     );
   }
 
+  // Guard for employee whose company workspace access was revoked by admin
+  if (!isAdmin && userProfile && !userProfile.companyId) {
+    return (
+      <div className="auth-page">
+        <div className="auth-container">
+          <div className="auth-card" style={{ textAlign: 'center', maxWidth: 460 }}>
+            <h2 style={{ color: 'var(--danger-600)', marginBottom: 'var(--space-4)' }}>Access Revoked</h2>
+            <p style={{ color: 'var(--gray-500)', marginBottom: 'var(--space-6)' }}>
+              You have been removed from this company workspace by your administrator. Please contact your manager or sign out.
+            </p>
+            <button className="btn btn-secondary btn-block" onClick={() => logout()}>
+              Sign Out
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Account package & status guard for Admin users
   if (isAdmin && userProfile) {
     const path = location.pathname;

@@ -17,7 +17,7 @@ export default function ProductsList() {
   const { companyId, companyInfo, isAdmin, currentUser, userProfile } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
-  const { isOnline } = useOffline();
+  const { isOnline, isSyncing, lastSyncTime } = useOffline();
   const [products, setProducts] = useState([]);
   const [stockUpdatedAt, setStockUpdatedAt] = useState(null);
   const [warehouses, setWarehouses] = useState([]);
@@ -113,7 +113,7 @@ export default function ProductsList() {
       unsubWarehouses();
       unsubProducts();
     };
-  }, [companyId, currentUser?.uid]);
+  }, [companyId, currentUser?.uid, lastSyncTime]);
 
   const handleCleanDuplicates = async () => {
     setCleaning(true);
@@ -298,7 +298,25 @@ export default function ProductsList() {
                 return (
                   <>
                     <td onClick={() => navigate(`/products/${product.id}`)}>
-                      <div className="font-medium">{product.name}</div>
+                      <div className="font-medium" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <span>{product.name}</span>
+                        {product.isPendingSync && (
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4,
+                            fontSize: 10,
+                            fontWeight: 700,
+                            padding: '1px 6px',
+                            borderRadius: 10,
+                            background: '#fef3c7',
+                            color: '#92400e',
+                            border: '1px solid #fde68a'
+                          }}>
+                            ⏳ Pending Sync
+                          </span>
+                        )}
+                      </div>
                       {product.sku && <div className="text-xs text-muted">SKU: {product.sku}</div>}
                     </td>
                     <td onClick={() => navigate(`/products/${product.id}`)}>

@@ -179,7 +179,7 @@ export default function Navbar({ onToggleSidebar, onToggleMobile }) {
           const isPro = userProfile?.package?.planId === 'pro' || maxComp > 1;
 
           return (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div className="navbar-desktop-plan-company" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               {/* Plan Badge */}
               <div
                 onClick={() => {
@@ -337,15 +337,6 @@ export default function Navbar({ onToggleSidebar, onToggleMobile }) {
               <span className="theme-toggle-text">Night</span>
             </>
           )}
-        </button>
-
-        {/* Mobile Search Toggle */}
-        <button
-          className="navbar-icon-btn navbar-mobile-search-btn"
-          onClick={() => setShowSearch(!showSearch)}
-          aria-label="Search"
-        >
-          <Search size={18} />
         </button>
 
         {/* Quick Add */}

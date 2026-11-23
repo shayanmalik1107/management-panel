@@ -74,8 +74,8 @@ export async function createProduct(companyId, productData, userId, userName) {
       timestamp: Date.now(),
     };
 
-    // If supplier name is provided with initial stock, also record initial stock purchase
-    if (productData.supplierName && Number(productData.currentStock) > 0) {
+    // If supplier name is provided with initial stock, and purchase is not skipped, also record initial stock purchase
+    if (!productData.skipPurchase && productData.supplierName && Number(productData.currentStock) > 0) {
       const purId = generateId('pur');
       const cost = Number(productData.purchasePrice) || 0;
       const qty = Number(productData.currentStock) || 0;
@@ -140,7 +140,7 @@ async function createProductOffline(companyId, productId, product, nameTrimmed, 
     timestamp: Date.now(),
   };
   let initialPurchase = null;
-  if (product.supplierName && Number(product.currentStock) > 0) {
+  if (!product.skipPurchase && product.supplierName && Number(product.currentStock) > 0) {
     const purchaseId = generateId('pur');
     let purchaseTimestamp = Date.now();
     if (product.purchaseDate) {

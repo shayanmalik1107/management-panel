@@ -26,6 +26,7 @@ export default function ProductForm() {
   const [newWhName, setNewWhName] = useState('');
   const [creatingWh, setCreatingWh] = useState(false);
   const [hasSubBoxes, setHasSubBoxes] = useState(true);
+  const [skipPurchaseEntry, setSkipPurchaseEntry] = useState(false);
   
   const [form, setForm] = useState({
     name: '',
@@ -255,7 +256,7 @@ export default function ProductForm() {
       }
     }
 
-    if (!isEditing) {
+    if (!isEditing && !skipPurchaseEntry) {
       if (!form.purchaseDate) {
         toast.error('Purchase date is compulsory for initial stock purchase entry');
         return;
@@ -284,6 +285,9 @@ export default function ProductForm() {
 
       const submitData = {
         ...form,
+        skipPurchase: skipPurchaseEntry,
+        supplierName: skipPurchaseEntry ? '' : form.supplierName,
+        reference: skipPurchaseEntry ? '' : form.reference,
         unit: 'pcs',
         unitType: form.unitType,
         purchasePrice: finalPurchasePrice,
@@ -347,67 +351,105 @@ export default function ProductForm() {
       <div className="card" style={{ maxWidth: 800 }}>
         <form className="card-body form-grid" onSubmit={handleSubmit}>
           
-          {/* INITIAL STOCK PURCHASE ENTRY SECTION MOVED TO TOP */}
+          {/* INITIAL STOCK PURCHASE ENTRY SECTION */}
           {!isEditing && (
             <>
               <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                <h3 style={{ fontSize: 'var(--font-size-md)', borderBottom: 'var(--border)', paddingBottom: 'var(--space-2)', marginBottom: 'var(--space-2)', color: 'var(--primary-700)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                  <ShoppingBag size={18} /> Initial Stock Purchase Entry (Compulsory)
-                </h3>
-                <span className="text-xs text-muted">
-                  Creating a new product requires recording an initial stock purchase in Purchases & General Ledger.
-                </span>
+                <div style={{
+                  background: skipPurchaseEntry ? 'rgba(37, 99, 235, 0.05)' : 'var(--primary-50)',
+                  border: skipPurchaseEntry ? '1px solid rgba(37, 99, 235, 0.25)' : '1px solid var(--primary-200)',
+                  borderRadius: 'var(--radius-md)',
+                  padding: 'var(--space-4)',
+                  marginBottom: 'var(--space-2)'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+                    <div>
+                      <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--color-text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <ShoppingBag size={17} /> Stock Entry & Purchase Mode
+                      </h4>
+                      <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--gray-500)' }}>
+                        {skipPurchaseEntry 
+                          ? 'Product-only mode: Product and initial stock are recorded directly without creating any supplier bill or ledger debt.' 
+                          : 'Purchase bill mode: Automatically records initial stock purchase into Purchases and Supplier Ledger.'}
+                      </p>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button
+                        type="button"
+                        className={`btn btn-sm ${!skipPurchaseEntry ? 'btn-primary' : 'btn-secondary'}`}
+                        onClick={() => setSkipPurchaseEntry(false)}
+                      >
+                        🛒 Record Purchase
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn btn-sm ${skipPurchaseEntry ? 'btn-primary' : 'btn-secondary'}`}
+                        onClick={() => {
+                          setSkipPurchaseEntry(true);
+                          setForm(f => ({ ...f, supplierName: '', reference: '' }));
+                        }}
+                      >
+                        📦 Add Product Only (No Purchase)
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              {/* Purchase Date */}
-              <div className="form-group">
-                <label className="form-label">Purchase Date *</label>
-                <input 
-                  type="date" 
-                  className="form-input" 
-                  value={form.purchaseDate}
-                  onChange={e => setForm({...form, purchaseDate: e.target.value})}
-                  max={getLocalDateString()}
-                />
-              </div>
+              {!skipPurchaseEntry && (
+                <>
+                  {/* Purchase Date */}
+                  <div className="form-group">
+                    <label className="form-label">Purchase Date *</label>
+                    <input 
+                      type="date" 
+                      className="form-input" 
+                      value={form.purchaseDate}
+                      onChange={e => setForm({...form, purchaseDate: e.target.value})}
+                      max={getLocalDateString()}
+                    />
+                  </div>
 
-              {/* Bill / Invoice Reference */}
-              <div className="form-group">
-                <label className="form-label">Bill / Invoice Reference *</label>
-                <input 
-                  type="text" 
-                  className="form-input" 
-                  placeholder="e.g. INV-2026-01"
-                  value={form.reference}
-                  onChange={e => setForm({...form, reference: e.target.value})}
-                />
-              </div>
+                  {/* Bill / Invoice Reference */}
+                  <div className="form-group">
+                    <label className="form-label">Bill / Invoice Reference *</label>
+                    <input 
+                      type="text" 
+                      className="form-input" 
+                      placeholder="e.g. INV-2026-01"
+                      value={form.reference}
+                      onChange={e => setForm({...form, reference: e.target.value})}
+                    />
+                  </div>
 
-              {/* Custom Searchable Supplier Dropdown */}
-              <SupplierSelectDropdown
-                suppliers={suppliers}
-                value={form.supplierName}
-                onChange={name => setForm({...form, supplierName: name})}
-                onSupplierCreated={async () => {
-                  const supList = await fetchAllCompanySuppliers(companyId);
-                  setSuppliers(supList);
-                }}
-                placeholder="Search or enter supplier name (e.g. Acme Wholesalers)..."
-                label="Supplier / Vendor Name *"
-                required={!isEditing}
-              />
+                  {/* Custom Searchable Supplier Dropdown */}
+                  <SupplierSelectDropdown
+                    suppliers={suppliers}
+                    value={form.supplierName}
+                    onChange={name => setForm({...form, supplierName: name})}
+                    onSupplierCreated={async () => {
+                      const supList = await fetchAllCompanySuppliers(companyId);
+                      setSuppliers(supList);
+                    }}
+                    placeholder="Search or enter supplier name (e.g. Acme Wholesalers)..."
+                    label="Supplier / Vendor Name *"
+                    required={!isEditing && !skipPurchaseEntry}
+                  />
 
-              {/* Additional Notes */}
-              <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                <label className="form-label">Additional Notes</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="Optional purchase notes or details..."
-                  value={form.notes}
-                  onChange={e => setForm({...form, notes: e.target.value})}
-                />
-              </div>
+                  {/* Additional Notes */}
+                  <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                    <label className="form-label">Additional Notes</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="Optional purchase notes or details..."
+                      value={form.notes}
+                      onChange={e => setForm({...form, notes: e.target.value})}
+                    />
+                  </div>
+                </>
+              )}
             </>
           )}
 

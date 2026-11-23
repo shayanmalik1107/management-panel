@@ -344,27 +344,20 @@ export default function LambaVoiceAssistant() {
     }
   };
 
-  // Automatically open AI Assistant & run executive audit upon login & company selection
+  // Keep AI Assistant closed initially on load — user can open via floating button whenever needed
   useEffect(() => {
     if (!companyId || !currentUser?.uid) return;
 
     const shouldAutoOpen = sessionStorage.getItem('lamba_auto_open_ai') === 'true';
-    const sessionAuditKey = `lamba_session_audit_shown_${companyId}_${currentUser.uid}`;
-    const alreadyAuditedInSession = sessionStorage.getItem(sessionAuditKey);
-
-    if (shouldAutoOpen || !alreadyAuditedInSession) {
+    if (shouldAutoOpen) {
       sessionStorage.removeItem('lamba_auto_open_ai');
-      sessionStorage.setItem(sessionAuditKey, 'true');
-
       setIsOpen(true);
-
       const timer = setTimeout(() => {
         runSystemAudit();
       }, 700);
-
       return () => clearTimeout(timer);
     }
-  }, [companyId, currentUser?.uid, shopContext.products.length]);
+  }, [companyId, currentUser?.uid]);
 
   // Clear conversation memory handler
   const handleClearMemory = async () => {

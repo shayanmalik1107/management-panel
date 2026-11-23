@@ -134,7 +134,7 @@ export default function BillingPage() {
   };
 
   return (
-    <div style={{ padding: '24px 32px', maxWidth: 1080, margin: '0 auto' }}>
+    <div className="billing-page-container" style={{ maxWidth: 1080, margin: '0 auto' }}>
       {/* Header Banner */}
       <div style={{
         background: isDark ? '#111827' : '#ffffff',

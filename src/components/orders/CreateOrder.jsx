@@ -53,6 +53,18 @@ export default function CreateOrder() {
     notes: ''
   });
 
+  // Lock background scroll when shop creation modal is open
+  useEffect(() => {
+    if (showNewCustomerModal) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [showNewCustomerModal]);
+
   const currency = companyInfo?.currency || 'Rs';
 
   useEffect(() => {
@@ -725,8 +737,8 @@ export default function CreateOrder() {
               </button>
             </div>
             
-            <form onSubmit={handleCreateQuickCustomer}>
-              <div className="modal-body form-grid form-grid-2col">
+            <form onSubmit={handleCreateQuickCustomer} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+              <div className="modal-body form-grid form-grid-2col" style={{ overflowY: 'auto', WebkitOverflowScrolling: 'touch', flex: 1, minHeight: 0, overscrollBehavior: 'contain' }}>
                 <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                   <label className="form-label">Shop / Company Name *</label>
                   <input 

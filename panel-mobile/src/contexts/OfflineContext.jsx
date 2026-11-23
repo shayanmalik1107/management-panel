@@ -19,12 +19,12 @@ export function OfflineProvider({ children }) {
   // Load outbox count
   const refreshOutbox = useCallback(async () => {
     try {
-      const items = (await getOutboxItems(companyId)).filter(item => userId && item.userId === userId);
+      const items = await getOutboxItems(companyId);
       setPendingItems(items);
     } catch (err) {
       console.warn('[Offline Context] Error reading outbox items:', err);
     }
-  }, [companyId, userId]);
+  }, [companyId]);
 
   useEffect(() => {
     refreshOutbox();
@@ -82,9 +82,10 @@ export function OfflineProvider({ children }) {
   }, [companyId, refreshOutbox]);
 
   const syncNow = async () => {
-    if (isSyncing) return;
-    await processOutbox(companyId);
+    if (isSyncing) return { skipped: true, reason: 'Already running' };
+    const res = await processOutbox(companyId);
     await refreshOutbox();
+    return res;
   };
 
   return (

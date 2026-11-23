@@ -1,6 +1,8 @@
 import React from 'react';
 import { Wifi, WifiOff, RefreshCw, Database, CheckCircle2, AlertCircle, X, CloudOff, ArrowUpRight } from 'lucide-react';
 import { useOffline } from '../../contexts/OfflineContext';
+import { useTheme } from '../../contexts/ThemeContext';
+import { useToast } from '../../contexts/ToastContext';
 import { formatDate } from '../../utils/formatters';
 
 export default function OfflineSyncStatus() {
@@ -14,6 +16,27 @@ export default function OfflineSyncStatus() {
     showSyncModal,
     setShowSyncModal,
   } = useOffline();
+
+  const { isDark } = useTheme();
+  const toast = useToast();
+
+  const handleSyncClick = async () => {
+    if (isSyncing) return;
+    try {
+      const res = await syncNow();
+      if (res?.successCount > 0) {
+        toast.success(`Successfully synced ${res.successCount} record(s) to cloud!`);
+      } else if (res?.failCount > 0) {
+        toast.error(`Sync encountered error on ${res.failCount} item(s). Please verify connection.`);
+      } else if (res?.skipped) {
+        toast.info(`Sync: ${res.reason || 'Nothing to sync'}`);
+      } else {
+        toast.info('All offline records are already synchronized.');
+      }
+    } catch (err) {
+      toast.error(`Sync error: ${err.message || 'Operation failed'}`);
+    }
+  };
 
   return (
     <>
@@ -35,20 +58,20 @@ export default function OfflineSyncStatus() {
           userSelect: 'none',
           border: '1px solid transparent',
           background: !isOnline 
-            ? 'rgba(239, 68, 68, 0.12)' 
+            ? (isDark ? 'rgba(239, 68, 68, 0.2)' : 'rgba(239, 68, 68, 0.12)') 
             : pendingCount > 0 
-              ? 'rgba(245, 158, 11, 0.12)' 
-              : 'rgba(16, 185, 129, 0.1)',
+              ? (isDark ? 'rgba(245, 158, 11, 0.2)' : 'rgba(245, 158, 11, 0.12)') 
+              : (isDark ? 'rgba(16, 185, 129, 0.18)' : 'rgba(16, 185, 129, 0.1)'),
           color: !isOnline 
-            ? '#ef4444' 
+            ? (isDark ? '#f87171' : '#ef4444') 
             : pendingCount > 0 
-              ? '#d97706' 
-              : '#10b981',
+              ? (isDark ? '#fbbf24' : '#d97706') 
+              : (isDark ? '#34d399' : '#10b981'),
           borderColor: !isOnline 
-            ? 'rgba(239, 68, 68, 0.25)' 
+            ? 'rgba(239, 68, 68, 0.3)' 
             : pendingCount > 0 
-              ? 'rgba(245, 158, 11, 0.25)' 
-              : 'rgba(16, 185, 129, 0.2)',
+              ? 'rgba(245, 158, 11, 0.3)' 
+              : 'rgba(16, 185, 129, 0.25)',
         }}
       >
         {isSyncing ? (
@@ -88,27 +111,30 @@ export default function OfflineSyncStatus() {
           style={{
             position: 'fixed',
             inset: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.55)',
-            backdropFilter: 'blur(4px)',
+            backgroundColor: 'rgba(0, 0, 0, 0.65)',
+            backdropFilter: 'blur(5px)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             zIndex: 10000,
             padding: '16px',
+            overscrollBehavior: 'contain',
           }}
         >
           <div 
             className="modal-container"
             onClick={e => e.stopPropagation()}
             style={{
-              background: 'var(--color-bg-surface, #ffffff)',
-              color: 'var(--color-text-primary, #1e293b)',
+              background: isDark ? '#111827' : '#ffffff',
+              color: isDark ? '#f1f5f9' : '#1e293b',
               borderRadius: '16px',
               maxWidth: '520px',
               width: '100%',
-              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1)',
+              boxShadow: isDark 
+                ? '0 25px 50px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.08)' 
+                : '0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1)',
               overflow: 'hidden',
-              border: '1px solid var(--color-border, #e2e8f0)',
+              border: isDark ? '1px solid #1f293d' : '1px solid #e2e8f0',
             }}
           >
             {/* Header */}
@@ -117,16 +143,18 @@ export default function OfflineSyncStatus() {
               alignItems: 'center',
               justifyContent: 'space-between',
               padding: '18px 24px',
-              borderBottom: '1px solid var(--color-border, #e2e8f0)',
-              backgroundColor: 'var(--color-bg-secondary, #f8fafc)',
+              borderBottom: isDark ? '1px solid #1f293d' : '1px solid #e2e8f0',
+              backgroundColor: isDark ? '#161f30' : '#f8fafc',
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <div style={{
                   width: '36px',
                   height: '36px',
                   borderRadius: '10px',
-                  backgroundColor: !isOnline ? '#fee2e2' : '#e0f2fe',
-                  color: !isOnline ? '#ef4444' : '#0284c7',
+                  backgroundColor: !isOnline 
+                    ? (isDark ? 'rgba(239, 68, 68, 0.2)' : '#fee2e2') 
+                    : (isDark ? 'rgba(2, 132, 199, 0.2)' : '#e0f2fe'),
+                  color: !isOnline ? '#ef4444' : (isDark ? '#38bdf8' : '#0284c7'),
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -134,10 +162,10 @@ export default function OfflineSyncStatus() {
                   {!isOnline ? <WifiOff size={18} /> : <Database size={18} />}
                 </div>
                 <div>
-                  <h3 className="sync-center-title" style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>
+                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: isDark ? '#ffffff' : '#0f172a' }}>
                     Offline & Cloud Sync Center
                   </h3>
-                  <p style={{ margin: 0, fontSize: '12px', color: '#64748b' }}>
+                  <p style={{ margin: 0, fontSize: '12px', color: isDark ? '#94a3b8' : '#64748b' }}>
                     Unlimited local storage with real-time Firebase sync
                   </p>
                 </div>
@@ -149,9 +177,12 @@ export default function OfflineSyncStatus() {
                   background: 'transparent',
                   border: 'none',
                   cursor: 'pointer',
-                  padding: '4px',
+                  padding: '6px',
                   borderRadius: '6px',
-                  color: 'var(--color-text-muted, #64748b)',
+                  color: isDark ? '#94a3b8' : '#64748b',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                 }}
               >
                 <X size={18} />
@@ -159,7 +190,7 @@ export default function OfflineSyncStatus() {
             </div>
 
             {/* Body */}
-            <div style={{ padding: '20px 24px' }}>
+            <div style={{ padding: '20px 24px', backgroundColor: isDark ? '#111827' : '#ffffff' }}>
               {/* Status Banner */}
               <div style={{
                 display: 'flex',
@@ -168,9 +199,15 @@ export default function OfflineSyncStatus() {
                 padding: '12px 16px',
                 borderRadius: '10px',
                 marginBottom: '16px',
-                backgroundColor: !isOnline ? '#fef2f2' : '#f0fdf4',
-                border: `1px solid ${!isOnline ? '#fecaca' : '#bbf7d0'}`,
-                color: !isOnline ? '#991b1b' : '#166534',
+                backgroundColor: !isOnline 
+                  ? (isDark ? 'rgba(239, 68, 68, 0.15)' : '#fef2f2') 
+                  : (isDark ? 'rgba(16, 185, 129, 0.15)' : '#f0fdf4'),
+                border: `1px solid ${!isOnline 
+                  ? (isDark ? 'rgba(239, 68, 68, 0.3)' : '#fecaca') 
+                  : (isDark ? 'rgba(16, 185, 129, 0.3)' : '#bbf7d0')}`,
+                color: !isOnline 
+                  ? (isDark ? '#f87171' : '#991b1b') 
+                  : (isDark ? '#34d399' : '#166534'),
                 fontSize: '13px',
                 fontWeight: 500,
               }}>
@@ -178,7 +215,7 @@ export default function OfflineSyncStatus() {
                   {!isOnline ? <WifiOff size={16} /> : <CheckCircle2 size={16} />}
                   <span>
                     {!isOnline 
-                      ? 'You are currently offline. All orders, shops, and products are being stored locally.' 
+                      ? 'You are currently offline. All orders, shops, and products are stored locally.' 
                       : 'Connected to Internet. Real-time Firebase sync active.'}
                   </span>
                 </div>
@@ -194,13 +231,13 @@ export default function OfflineSyncStatus() {
                 <div style={{
                   padding: '12px 14px',
                   borderRadius: '10px',
-                  border: '1px solid var(--color-border, #e2e8f0)',
-                  backgroundColor: 'var(--color-bg-secondary, #f8fafc)',
+                  border: isDark ? '1px solid #1f293d' : '1px solid #e2e8f0',
+                  backgroundColor: isDark ? '#161f30' : '#f8fafc',
                 }}>
-                  <div style={{ fontSize: '11px', color: 'var(--color-text-muted, #64748b)', fontWeight: 600, textTransform: 'uppercase' }}>
+                  <div style={{ fontSize: '11px', color: isDark ? '#94a3b8' : '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>
                     Local Storage
                   </div>
-                  <div style={{ fontSize: '15px', fontWeight: 700, marginTop: '4px', color: '#10b981' }}>
+                  <div style={{ fontSize: '15px', fontWeight: 700, marginTop: '4px', color: isDark ? '#34d399' : '#10b981' }}>
                     Unlimited (Persistent)
                   </div>
                 </div>
@@ -208,13 +245,18 @@ export default function OfflineSyncStatus() {
                 <div style={{
                   padding: '12px 14px',
                   borderRadius: '10px',
-                  border: '1px solid var(--color-border, #e2e8f0)',
-                  backgroundColor: 'var(--color-bg-secondary, #f8fafc)',
+                  border: isDark ? '1px solid #1f293d' : '1px solid #e2e8f0',
+                  backgroundColor: isDark ? '#161f30' : '#f8fafc',
                 }}>
-                  <div style={{ fontSize: '11px', color: 'var(--color-text-muted, #64748b)', fontWeight: 600, textTransform: 'uppercase' }}>
+                  <div style={{ fontSize: '11px', color: isDark ? '#94a3b8' : '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>
                     Pending Sync Items
                   </div>
-                  <div style={{ fontSize: '15px', fontWeight: 700, marginTop: '4px', color: pendingCount > 0 ? '#d97706' : '#10b981' }}>
+                  <div style={{ 
+                    fontSize: '15px', 
+                    fontWeight: 700, 
+                    marginTop: '4px', 
+                    color: pendingCount > 0 ? (isDark ? '#fbbf24' : '#d97706') : (isDark ? '#34d399' : '#10b981') 
+                  }}>
                     {pendingCount} {pendingCount === 1 ? 'record' : 'records'}
                   </div>
                 </div>
@@ -228,11 +270,18 @@ export default function OfflineSyncStatus() {
                   justifyContent: 'space-between',
                   marginBottom: '10px' 
                 }}>
-                  <h4 style={{ margin: 0, fontSize: '13px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#0f172a' }}>
+                  <h4 style={{ 
+                    margin: 0, 
+                    fontSize: '13px', 
+                    fontWeight: 700, 
+                    textTransform: 'uppercase', 
+                    letterSpacing: '0.5px', 
+                    color: isDark ? '#f1f5f9' : '#0f172a' 
+                  }}>
                     Outbox Queue ({pendingItems.length})
                   </h4>
                   {lastSyncTime && (
-                    <span style={{ fontSize: '11px', color: 'var(--color-text-muted, #64748b)' }}>
+                    <span style={{ fontSize: '11px', color: isDark ? '#94a3b8' : '#64748b' }}>
                       Last sync: {new Date(lastSyncTime).toLocaleTimeString()}
                     </span>
                   )}
@@ -243,9 +292,10 @@ export default function OfflineSyncStatus() {
                     textAlign: 'center',
                     padding: '28px 16px',
                     borderRadius: '10px',
-                    border: '1px dashed var(--color-border, #cbd5e1)',
-                    color: 'var(--color-text-muted, #64748b)',
+                    border: isDark ? '1px dashed #334155' : '1px dashed #cbd5e1',
+                    color: isDark ? '#94a3b8' : '#64748b',
                     fontSize: '13px',
+                    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.02)' : 'transparent',
                   }}>
                     <CheckCircle2 size={28} color="#10b981" style={{ margin: '0 auto 8px', display: 'block' }} />
                     All records are synced with Firebase cloud!
@@ -254,9 +304,9 @@ export default function OfflineSyncStatus() {
                   <div style={{
                     maxHeight: '220px',
                     overflowY: 'auto',
-                    border: '1px solid var(--color-border, #e2e8f0)',
+                    border: isDark ? '1px solid #1f293d' : '1px solid #e2e8f0',
                     borderRadius: '10px',
-                    divideY: '1px solid var(--color-border, #e2e8f0)',
+                    backgroundColor: isDark ? '#161f30' : '#ffffff',
                   }}>
                     {pendingItems.map((item, idx) => (
                       <div 
@@ -266,15 +316,17 @@ export default function OfflineSyncStatus() {
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'space-between',
-                          borderBottom: idx < pendingItems.length - 1 ? '1px solid var(--color-border, #f1f5f9)' : 'none',
+                          borderBottom: idx < pendingItems.length - 1 
+                            ? (isDark ? '1px solid #1f293d' : '1px solid #f1f5f9') 
+                            : 'none',
                           fontSize: '13px',
                         }}
                       >
                         <div>
-                          <div style={{ fontWeight: 600 }}>
+                          <div style={{ fontWeight: 600, color: isDark ? '#ffffff' : '#0f172a' }}>
                             {item.description || item.actionType.replace('_', ' ').toUpperCase()}
                           </div>
-                          <div style={{ fontSize: '11px', color: 'var(--color-text-muted, #64748b)', marginTop: '2px' }}>
+                          <div style={{ fontSize: '11px', color: isDark ? '#94a3b8' : '#64748b', marginTop: '2px' }}>
                             Created by {item.userName || 'User'} • {formatDate(item.createdAt)}
                           </div>
                         </div>
@@ -284,8 +336,12 @@ export default function OfflineSyncStatus() {
                           borderRadius: '6px',
                           fontSize: '11px',
                           fontWeight: 600,
-                          backgroundColor: item.status === 'syncing' ? '#e0f2fe' : '#fef3c7',
-                          color: item.status === 'syncing' ? '#0369a1' : '#b45309',
+                          backgroundColor: item.status === 'syncing' 
+                            ? (isDark ? 'rgba(56, 189, 248, 0.2)' : '#e0f2fe') 
+                            : (isDark ? 'rgba(245, 158, 11, 0.2)' : '#fef3c7'),
+                          color: item.status === 'syncing' 
+                            ? (isDark ? '#38bdf8' : '#0369a1') 
+                            : (isDark ? '#fbbf24' : '#b45309'),
                         }}>
                           {item.status === 'syncing' ? 'Syncing...' : 'Pending'}
                         </span>
@@ -295,12 +351,12 @@ export default function OfflineSyncStatus() {
                 )}
               </div>
 
-              {/* Action Button */}
+              {/* Action Buttons */}
               <div style={{ display: 'flex', gap: '10px' }}>
                 <button
                   type="button"
                   className="btn btn-primary"
-                  onClick={syncNow}
+                  onClick={handleSyncClick}
                   disabled={!isOnline || isSyncing || pendingCount === 0}
                   style={{
                     flex: 1,
@@ -319,7 +375,13 @@ export default function OfflineSyncStatus() {
                   type="button"
                   className="btn btn-secondary"
                   onClick={() => setShowSyncModal(false)}
-                  style={{ padding: '10px 18px', fontWeight: 600 }}
+                  style={{ 
+                    padding: '10px 18px', 
+                    fontWeight: 600,
+                    backgroundColor: isDark ? '#1f293d' : '#f1f5f9',
+                    color: isDark ? '#f1f5f9' : '#475569',
+                    borderColor: isDark ? '#334155' : '#e2e8f0',
+                  }}
                 >
                   Close
                 </button>

@@ -99,6 +99,13 @@
   --border-color: var(--gray-200);
   --border: 1px solid var(--border-color);
 
+  /* Semantic Containers & Surfaces */
+  --color-bg-surface: #ffffff;
+  --color-bg-secondary: #f8fafc;
+  --color-text-primary: #1e293b;
+  --color-border: #e2e8f0;
+  --color-bg-card: #ffffff;
+
   /* Transitions */
   --transition-fast: 150ms ease;
   --transition-base: 200ms ease;
@@ -1439,6 +1446,8 @@ h4 { font-size: var(--font-size-lg); }
   z-index: 1000;
   padding: var(--space-4);
   animation: fadeIn 0.15s ease;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
 }
 
 .modal {
@@ -1448,9 +1457,19 @@ h4 { font-size: var(--font-size-lg); }
   width: 100%;
   max-width: 560px;
   max-height: 90vh;
+  max-height: 90dvh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   animation: slideUp 0.2s ease;
+}
+
+.modal > form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .modal-lg {
@@ -1495,8 +1514,13 @@ h4 { font-size: var(--font-size-lg); }
 
 .modal-body {
   padding: var(--space-6);
-  overflow-y: auto;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   flex: 1;
+  min-height: 0;
+  max-height: calc(90vh - 140px);
+  max-height: calc(90dvh - 140px);
 }
 
 .modal-footer {
@@ -3597,6 +3621,13 @@ body.dark {
   --shadow-md: 0 4px 10px rgba(0, 0, 0, 0.55);
   --shadow-lg: 0 12px 25px rgba(0, 0, 0, 0.65);
   --shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.75);
+
+  /* Semantic Containers & Surfaces */
+  --color-bg-surface: #111827;
+  --color-bg-secondary: #161f30;
+  --color-text-primary: #f8fafc;
+  --color-border: #1f293d;
+  --color-bg-card: #111827;
 }
 
 /* Base Body and Backgrounds */
@@ -3897,25 +3928,111 @@ body.dark {
   color: #64748b;
 }
 
-/* Dark Modals */
-[data-theme="dark"] .modal {
-  background-color: #111827;
-  border: 1px solid #1f293d;
-  color: #f1f5f9;
+/* Dark Modals & Popups */
+[data-theme="dark"] .modal-overlay {
+  background-color: rgba(0, 0, 0, 0.75) !important;
+  backdrop-filter: blur(4px) !important;
+}
+
+[data-theme="dark"] .modal,
+[data-theme="dark"] .modal-container {
+  background-color: #111827 !important;
+  border: 1px solid #1f293d !important;
+  color: #f1f5f9 !important;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8) !important;
 }
 
 [data-theme="dark"] .modal-header,
 [data-theme="dark"] .modal-footer {
-  border-color: #1f293d;
+  background-color: #111827 !important;
+  border-color: #1f293d !important;
+}
+
+[data-theme="dark"] .modal-title {
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] .modal-body {
+  background-color: #111827 !important;
+  color: #f1f5f9 !important;
+}
+
+[data-theme="dark"] .modal label,
+[data-theme="dark"] .modal .form-label {
+  color: #cbd5e1 !important;
+}
+
+[data-theme="dark"] .modal .text-muted {
+  color: #94a3b8 !important;
 }
 
 [data-theme="dark"] .modal-close {
-  color: #94a3b8;
+  color: #94a3b8 !important;
 }
 
 [data-theme="dark"] .modal-close:hover {
-  background-color: #1e293b;
-  color: #ffffff;
+  background-color: #1e293b !important;
+  color: #ffffff !important;
+}
+
+/* ============================================================
+   DARK TOAST NOTIFICATIONS (POPUP MESSAGES)
+   ============================================================ */
+[data-theme="dark"] .toast,
+html.dark .toast,
+body.dark .toast {
+  background-color: #1e293b !important;
+  border: 1px solid #334155 !important;
+  color: #ffffff !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7) !important;
+}
+
+[data-theme="dark"] .toast-message,
+html.dark .toast-message,
+body.dark .toast-message {
+  color: #ffffff !important;
+  font-weight: 500 !important;
+}
+
+[data-theme="dark"] .toast-close,
+html.dark .toast-close,
+body.dark .toast-close {
+  color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .toast-close:hover,
+html.dark .toast-close:hover,
+body.dark .toast-close:hover {
+  color: #ffffff !important;
+  background: #334155 !important;
+}
+
+[data-theme="dark"] .toast-success,
+html.dark .toast-success,
+body.dark .toast-success {
+  background-color: #062e20 !important;
+  border-left: 4px solid #10b981 !important;
+}
+
+[data-theme="dark"] .toast-error,
+html.dark .toast-error,
+body.dark .toast-error {
+  background-color: #3b1115 !important;
+  border-left: 4px solid #ef4444 !important;
+}
+
+[data-theme="dark"] .toast-warning,
+html.dark .toast-warning,
+body.dark .toast-warning {
+  background-color: #331f08 !important;
+  border-left: 4px solid #f59e0b !important;
+}
+
+[data-theme="dark"] .toast-info,
+html.dark .toast-info,
+body.dark .toast-info {
+  background-color: #112544 !important;
+  border-left: 4px solid #3b82f6 !important;
 }
 
 /* Dark Buttons */
@@ -4163,6 +4280,38 @@ body.dark {
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4) !important;
 }
 
+/* Dark Calendar Filter Box & Date Picker */
+[data-theme="dark"] .calendar-filter-box {
+  background-color: #161f30 !important;
+  border-color: #2e384d !important;
+  color: #f8fafc !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4) !important;
+}
+
+[data-theme="dark"] .calendar-filter-box:hover,
+[data-theme="dark"] .calendar-filter-box:focus-within {
+  border-color: #818cf8 !important;
+}
+
+[data-theme="dark"] .calendar-filter-box.active {
+  background-color: #1e293b !important;
+  border-color: #6366f1 !important;
+}
+
+[data-theme="dark"] .calendar-date-input {
+  color: #ffffff !important;
+  color-scheme: dark !important;
+  background: transparent !important;
+}
+
+[data-theme="dark"] .calendar-clear-btn {
+  color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .calendar-clear-btn:hover {
+  color: #ef4444 !important;
+}
+
 /* ============================================================
    DARK TABLE TOOLBARS & FORM CONTROLS
    ============================================================ */
@@ -4276,7 +4425,9 @@ body.dark {
 }
 
 /* Offline & Cloud Sync Center modal title in dark theme */
-[data-theme="dark"] .sync-center-title,
+[data-theme="dark"] .sync-center-title {
+  color: #ffffff !important;
+}
 .sync-center-title {
   color: #0f172a !important;
 }

@@ -1,5 +1,6 @@
 // Offline Context — Tracks connectivity and outbox queue sync
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { Network } from '@capacitor/network';
 import { useAuth } from './AuthContext';
 import { getOutboxItems, requestPersistentStorage, getActiveCachedUserId } from '../services/offlineStorage';
 import { processOutbox, onSyncStatusChange, initAutoSync } from '../services/syncEngine';
@@ -18,12 +19,12 @@ export function OfflineProvider({ children }) {
   // Load outbox count
   const refreshOutbox = useCallback(async () => {
     try {
-      const items = (await getOutboxItems(companyId)).filter(item => userId && item.userId === userId);
+      const items = await getOutboxItems(companyId);
       setPendingItems(items);
     } catch (err) {
       console.warn('[Offline Context] Error reading outbox items:', err);
     }
-  }, [companyId, userId]);
+  }, [companyId]);
 
   useEffect(() => {
     refreshOutbox();
@@ -44,6 +45,7 @@ export function OfflineProvider({ children }) {
     const handleOnline = () => {
       setIsOnline(true);
       refreshOutbox();
+      if (companyId) processOutbox(companyId);
     };
     const handleOffline = () => {
       setIsOnline(false);
@@ -53,18 +55,37 @@ export function OfflineProvider({ children }) {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
+    let networkHandle = null;
+    try {
+      Network.getStatus().then((status) => {
+        setIsOnline(status.connected);
+      }).catch(() => {});
+
+      Network.addListener('networkStatusChange', (status) => {
+        setIsOnline(status.connected);
+        if (status.connected) {
+          refreshOutbox();
+          if (companyId) processOutbox(companyId);
+        } else {
+          refreshOutbox();
+        }
+      }).then(handle => { networkHandle = handle; }).catch(() => {});
+    } catch (_) {}
+
     return () => {
       unsubStatus();
       if (unsubAutoSync) unsubAutoSync();
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      if (networkHandle && networkHandle.remove) networkHandle.remove();
     };
   }, [companyId, refreshOutbox]);
 
   const syncNow = async () => {
-    if (isSyncing) return;
-    await processOutbox(companyId);
+    if (isSyncing) return { skipped: true, reason: 'Already running' };
+    const res = await processOutbox(companyId);
     await refreshOutbox();
+    return res;
   };
 
   return (

@@ -1,8 +1,9 @@
 // Auth Context: Centralized authentication and user state
 import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { ref, onValue } from 'firebase/database';
+import { ref, onValue, update } from 'firebase/database';
 import { auth, database } from '../firebase';
+import { warmupOfflineData } from '../services/offlineSyncWarmup';
 
 const AuthContext = createContext(null);
 
@@ -36,8 +37,6 @@ function saveCachedAuthSession(user, profile, company) {
         companyInfo: company,
         savedAt: Date.now(),
       }));
-      // Clear any explicit logout flag on fresh session save
-      localStorage.removeItem('lamba_explicit_logout');
     }
   } catch (e) {
     console.warn('[AuthContext] Failed to save session to cache:', e);
@@ -58,37 +57,20 @@ export function AuthProvider({ children }) {
   const userUnsubRef = useRef(null);
 
   useEffect(() => {
-    // If cached session exists, never block UI with a loading spinner
-    if (cached) {
+    // If offline on initial load, ensure loading spinner is removed immediately
+    if (typeof navigator !== 'undefined' && !navigator.onLine && cached) {
       setLoading(false);
     }
 
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      // If user is null but we are offline and have a cached session, preserve it!
       const explicitLogout = localStorage.getItem('lamba_explicit_logout') === '1';
-
-      if (!user) {
-        // If the user did NOT explicitly log out, keep them logged in locally!
-        if (cached && !explicitLogout) {
-          console.log('[AuthContext] Preserving active local session for offline/mobile use.');
-          setCurrentUser(cached.currentUser);
-          setUserProfile(cached.userProfile);
-          setCompanyInfo(cached.companyInfo);
-          setLoading(false);
-          return;
-        }
-
-        // Only clear when explicit logout was triggered
-        setUserProfile(null);
-        setCompanyInfo(null);
-        setCurrentUser(null);
-        localStorage.removeItem('lamba_auth_session');
-        localStorage.removeItem('lamba_explicit_logout');
+      if (!user && !navigator.onLine && cached && !explicitLogout) {
+        console.log('[AuthContext] Offline mode: retaining cached session.');
         setLoading(false);
         return;
       }
 
-      // Live authenticated user from Firebase
-      localStorage.removeItem('lamba_explicit_logout');
       setCurrentUser(user);
 
       // Clean up previous user listener
@@ -102,63 +84,74 @@ export function AuthProvider({ children }) {
         companyUnsubRef.current = null;
       }
 
-      const userRef = ref(database, `users/${user.uid}`);
-      const unsubUser = onValue(userRef, (snapshot) => {
-        if (snapshot.exists()) {
-          const profile = { uid: user.uid, ...snapshot.val(), permissionsSyncedAt: Date.now() };
-          setUserProfile(profile);
+      if (user) {
+        const userRef = ref(database, `users/${user.uid}`);
+        const unsubUser = onValue(userRef, (snapshot) => {
+          if (snapshot.exists()) {
+            const profile = { uid: user.uid, ...snapshot.val(), permissionsSyncedAt: Date.now() };
+            setUserProfile(profile);
 
-          const companyId = profile.companyId;
+            // Silently warm up all offline collections in the background
+            warmupOfflineData(profile, user);
 
-          // Clean up previous company listener before creating new one
-          if (companyUnsubRef.current) {
-            companyUnsubRef.current();
-            companyUnsubRef.current = null;
-          }
+            const activeLocalCompId = localStorage.getItem(`lamba_selected_company_${user.uid}`);
+            const companyId = activeLocalCompId || profile.companyId;
 
-          if (companyId) {
-            const companyRef = ref(database, `companies/${companyId}/info`);
-            const unsubCompany = onValue(companyRef, (companySnap) => {
-              let comp = null;
-              if (companySnap.exists()) {
-                comp = { id: companyId, ...companySnap.val() };
-                setCompanyInfo(comp);
-              } else {
-                setCompanyInfo(null);
-              }
-              saveCachedAuthSession(user, profile, comp);
+            // Clean up previous company listener before creating new one
+            if (companyUnsubRef.current) {
+              companyUnsubRef.current();
+              companyUnsubRef.current = null;
+            }
+
+            if (companyId) {
+              const companyRef = ref(database, `companies/${companyId}/info`);
+              const unsubCompany = onValue(companyRef, (companySnap) => {
+                let comp = null;
+                if (companySnap.exists()) {
+                  comp = { id: companyId, ...companySnap.val() };
+                  setCompanyInfo(comp);
+                } else {
+                  // Fallback to local storage cached company info
+                  try {
+                    const localCached = localStorage.getItem(`lamba_company_info_${companyId}`);
+                    if (localCached) comp = JSON.parse(localCached);
+                  } catch (_) {}
+                  setCompanyInfo(comp || null);
+                }
+                saveCachedAuthSession(user, profile, comp);
+                setLoading(false);
+              }, (err) => {
+                console.warn('[AuthContext] Company info offline fallback:', err);
+                try {
+                  const localCached = localStorage.getItem(`lamba_company_info_${companyId}`);
+                  if (localCached) setCompanyInfo(JSON.parse(localCached));
+                } catch (_) {}
+                setLoading(false);
+              });
+              companyUnsubRef.current = unsubCompany;
+            } else {
+              setCompanyInfo(null);
+              saveCachedAuthSession(user, profile, null);
               setLoading(false);
-            }, (err) => {
-              console.warn('[AuthContext] Company info offline fallback:', err);
-              saveCachedAuthSession(user, profile, cached?.companyInfo || null);
-              setLoading(false);
-            });
-            companyUnsubRef.current = unsubCompany;
-          } else {
-            setCompanyInfo(null);
-            saveCachedAuthSession(user, profile, null);
-            setLoading(false);
-          }
-        } else {
-          // If server returns empty but we have cached profile and no explicit logout, retain cached
-          if (cached?.userProfile && !explicitLogout) {
-            setUserProfile(cached.userProfile);
-            setCompanyInfo(cached.companyInfo);
+            }
           } else {
             setUserProfile(null);
             setCompanyInfo(null);
+            setLoading(false);
           }
+        }, (err) => {
+          console.warn('[AuthContext] User profile offline fallback:', err);
           setLoading(false);
-        }
-      }, (err) => {
-        console.warn('[AuthContext] User profile offline fallback:', err);
-        if (cached?.userProfile && !explicitLogout) {
-          setUserProfile(cached.userProfile);
-          setCompanyInfo(cached.companyInfo);
-        }
+        });
+        userUnsubRef.current = unsubUser;
+      } else {
+        // Explicit logout must clear the offline shortcut even without internet.
+        setUserProfile(null);
+        setCompanyInfo(null);
+        localStorage.removeItem('lamba_auth_session');
+        localStorage.removeItem('lamba_explicit_logout');
         setLoading(false);
-      });
-      userUnsubRef.current = unsubUser;
+      }
     });
 
     return () => {
@@ -170,11 +163,50 @@ export function AuthProvider({ children }) {
 
   const isAdmin = userProfile?.role === 'admin';
   const isEmployee = userProfile?.role === 'employee';
-  const companyId = userProfile?.companyId;
+  const targetUid = userProfile?.uid || currentUser?.uid;
+  const activeLocalCompId = targetUid ? localStorage.getItem(`lamba_selected_company_${targetUid}`) : null;
+  const companyId = activeLocalCompId || userProfile?.companyId;
   const permissions = userProfile?.permissions || {};
   const isDisabled = userProfile?.status === 'disabled';
   const isCompanyClosed = companyInfo?.status === 'closed' || companyInfo?.status === 'disabled';
   const isCompanyPending = companyInfo?.status === 'pending';
+
+  const switchCompany = async (newCompanyId) => {
+    if (!newCompanyId) return;
+    const uid = userProfile?.uid || currentUser?.uid;
+    if (uid) {
+      localStorage.setItem(`lamba_selected_company_${uid}`, newCompanyId);
+    }
+    
+    // 1. Immediately update userProfile state
+    setUserProfile(prev => prev ? ({ ...prev, companyId: newCompanyId }) : prev);
+
+    // 2. Read cached company info for instant 0ms offline switch
+    let newCompInfo = null;
+    try {
+      const localCached = localStorage.getItem(`lamba_company_info_${newCompanyId}`);
+      if (localCached) newCompInfo = JSON.parse(localCached);
+      if (!newCompInfo) {
+        const userComps = JSON.parse(localStorage.getItem(`lamba_user_companies_${uid}`) || '[]');
+        newCompInfo = userComps.find(c => c.id === newCompanyId);
+      }
+    } catch (_) {}
+    if (newCompInfo) {
+      setCompanyInfo(newCompInfo);
+    }
+
+    // 3. Update cached auth session
+    saveCachedAuthSession(currentUser, { ...userProfile, companyId: newCompanyId }, newCompInfo || companyInfo);
+
+    // 4. Try updating Firebase if online
+    try {
+      if (typeof navigator !== 'undefined' && navigator.onLine && uid) {
+        await update(ref(database, `users/${uid}`), { companyId: newCompanyId });
+      }
+    } catch (err) {
+      console.warn('[AuthContext] Cloud update for company switch delayed:', err);
+    }
+  };
 
   const hasPermission = (permission) => {
     if (isAdmin) return true;
@@ -196,6 +228,7 @@ export function AuthProvider({ children }) {
     isCompanyPending,
     hasPermission,
     canEditOrderPrice,
+    switchCompany,
     permissionsSyncedAt: userProfile?.permissionsSyncedAt || cached?.userProfile?.permissionsSyncedAt || null,
     loading,
   };

@@ -2,15 +2,27 @@ import { useState, useEffect } from 'react';
 import { Mail, KeyRound, ShieldAlert, CheckCircle2, RotateCcw, X, Loader2, Sparkles, Send } from 'lucide-react';
 import { startTrialSubscription } from '../../services/authService';
 import { useToast } from '../../contexts/ToastContext';
+import { useTheme } from '../../contexts/ThemeContext';
 
 export default function TrialOtpModal({ isOpen, onClose, userProfile, onSuccess }) {
   const toast = useToast();
+  const { isDark } = useTheme();
   const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
   const [step, setStep] = useState('email'); // 'email' | 'otp'
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [countdown, setCountdown] = useState(0);
+
+  const getApiUrl = (endpoint) => {
+    if (typeof window !== 'undefined') {
+      if (window.location.protocol === 'capacitor:' || 
+         (window.location.hostname === 'localhost' && window.location.port !== '5173')) {
+        return `https://management-panel-ombpv9gpl-shayan-malik-s-projects.vercel.app${endpoint}`;
+      }
+    }
+    return endpoint;
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -58,7 +70,7 @@ export default function TrialOtpModal({ isOpen, onClose, userProfile, onSuccess 
 
     setLoading(true);
     try {
-      const response = await fetch('/api/otp/send', {
+      const response = await fetch(getApiUrl('/api/otp/send'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -68,10 +80,12 @@ export default function TrialOtpModal({ isOpen, onClose, userProfile, onSuccess 
       });
 
       let data = {};
+      const resText = await response.text();
       try {
-        data = await response.json();
+        data = JSON.parse(resText);
       } catch (_) {
-        throw new Error('Verification service is momentarily starting up. Please click Send again.');
+        console.warn('Raw response from /api/otp/send:', resText);
+        throw new Error('Verification service error. Please try again.');
       }
 
       if (!response.ok || !data.success) {
@@ -102,7 +116,7 @@ export default function TrialOtpModal({ isOpen, onClose, userProfile, onSuccess 
     setLoading(true);
     try {
       const cleanEmail = email.trim().toLowerCase();
-      const response = await fetch('/api/otp/verify', {
+      const response = await fetch(getApiUrl('/api/otp/verify'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -113,10 +127,11 @@ export default function TrialOtpModal({ isOpen, onClose, userProfile, onSuccess 
       });
 
       let data = {};
+      const resText = await response.text();
       try {
-        data = await response.json();
+        data = JSON.parse(resText);
       } catch (_) {
-        throw new Error('Verification service is momentarily unreachable. Please try again.');
+        throw new Error('Verification service error. Please try again.');
       }
 
       if (!response.ok || !data.success) {
@@ -155,20 +170,20 @@ export default function TrialOtpModal({ isOpen, onClose, userProfile, onSuccess 
       padding: 16,
     }}>
       <div style={{
-        background: '#ffffff',
+        background: isDark ? '#111827' : '#ffffff',
         borderRadius: 24,
         width: '100%',
         maxWidth: 440,
-        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+        boxShadow: isDark ? '0 25px 50px -12px rgba(0, 0, 0, 0.8)' : '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
         overflow: 'hidden',
-        border: '1px solid #e2e8f0',
+        border: isDark ? '1px solid #1f293d' : '1px solid #e2e8f0',
         animation: 'modalSlideIn 0.2s ease-out',
       }}>
         {/* Header */}
         <div style={{
           padding: '24px 28px 20px',
-          background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
-          borderBottom: '1px solid #bfdbfe',
+          background: isDark ? '#161f30' : 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
+          borderBottom: isDark ? '1px solid #1f293d' : '1px solid #bfdbfe',
           display: 'flex',
           alignItems: 'flex-start',
           justifyContent: 'space-between',
@@ -189,10 +204,10 @@ export default function TrialOtpModal({ isOpen, onClose, userProfile, onSuccess 
             }}>
               <Sparkles size={12} /> INSTANT ACCESS
             </div>
-            <h3 style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', margin: 0 }}>
+            <h3 style={{ fontSize: 20, fontWeight: 800, color: isDark ? '#ffffff' : '#0f172a', margin: 0 }}>
               Verify Email for 3-Day Trial
             </h3>
-            <p style={{ fontSize: 13, color: '#475569', margin: '4px 0 0 0' }}>
+            <p style={{ fontSize: 13, color: isDark ? '#94a3b8' : '#475569', margin: '4px 0 0 0' }}>
               One-time email verification code to start your trial immediately.
             </p>
           </div>
@@ -202,7 +217,7 @@ export default function TrialOtpModal({ isOpen, onClose, userProfile, onSuccess 
               background: 'transparent',
               border: 'none',
               cursor: 'pointer',
-              color: '#64748b',
+              color: isDark ? '#94a3b8' : '#64748b',
               padding: 4,
               borderRadius: 8,
             }}
@@ -212,7 +227,7 @@ export default function TrialOtpModal({ isOpen, onClose, userProfile, onSuccess 
         </div>
 
         {/* Body */}
-        <div style={{ padding: '24px 28px' }}>
+        <div style={{ padding: '24px 28px', backgroundColor: isDark ? '#111827' : '#ffffff' }}>
           {errorMsg && (
             <div style={{
               background: '#fee2e2',
@@ -235,7 +250,7 @@ export default function TrialOtpModal({ isOpen, onClose, userProfile, onSuccess 
           {step === 'email' ? (
             <form onSubmit={handleSendOtp}>
               <div style={{ marginBottom: 20 }}>
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 8 }}>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: isDark ? '#cbd5e1' : '#334155', marginBottom: 8 }}>
                   Enter Email Address
                 </label>
                 <div style={{ position: 'relative' }}>
@@ -251,7 +266,9 @@ export default function TrialOtpModal({ isOpen, onClose, userProfile, onSuccess 
                       width: '100%',
                       padding: '12px 14px 12px 42px',
                       borderRadius: 12,
-                      border: '1.5px solid #cbd5e1',
+                      border: isDark ? '1.5px solid #334155' : '1.5px solid #cbd5e1',
+                      background: isDark ? '#161f30' : '#ffffff',
+                      color: isDark ? '#ffffff' : '#0f172a',
                       fontSize: 15,
                       fontWeight: 600,
                       outline: 'none',
@@ -259,21 +276,21 @@ export default function TrialOtpModal({ isOpen, onClose, userProfile, onSuccess 
                     }}
                   />
                 </div>
-                <div style={{ fontSize: 12, color: '#64748b', marginTop: 8 }}>
+                <div style={{ fontSize: 12, color: isDark ? '#94a3b8' : '#64748b', marginTop: 8 }}>
                   🔒 Each email address is limited to 1 trial account to prevent abuse.
                 </div>
               </div>
 
               <div style={{
-                background: '#f8fafc',
-                border: '1px solid #e2e8f0',
+                background: isDark ? '#161f30' : '#f8fafc',
+                border: isDark ? '1px solid #1f293d' : '1px solid #e2e8f0',
                 borderRadius: 12,
                 padding: '12px 14px',
                 marginBottom: 24,
                 fontSize: 12.5,
-                color: '#475569',
+                color: isDark ? '#94a3b8' : '#475569',
               }}>
-                <div style={{ fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>Included in 3-Day Free Trial:</div>
+                <div style={{ fontWeight: 700, color: isDark ? '#ffffff' : '#0f172a', marginBottom: 4 }}>Included in 3-Day Free Trial:</div>
                 • 1 Company Workspace<br />
                 • Up to 3 Employee Accounts<br />
                 • Full Unlimited Features (Invoicing, Ledgers, Inventory)<br />
@@ -315,7 +332,7 @@ export default function TrialOtpModal({ isOpen, onClose, userProfile, onSuccess 
             <form onSubmit={handleVerifyOtp}>
               <div style={{ marginBottom: 16 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <label style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>
+                  <label style={{ fontSize: 13, fontWeight: 700, color: isDark ? '#cbd5e1' : '#334155' }}>
                     Enter 6-Digit Email Code
                   </label>
                   <button
@@ -341,7 +358,9 @@ export default function TrialOtpModal({ isOpen, onClose, userProfile, onSuccess 
                       width: '100%',
                       padding: '12px 14px 12px 42px',
                       borderRadius: 12,
-                      border: '1.5px solid #cbd5e1',
+                      border: isDark ? '1.5px solid #334155' : '1.5px solid #cbd5e1',
+                      background: isDark ? '#161f30' : '#ffffff',
+                      color: isDark ? '#ffffff' : '#0f172a',
                       fontSize: 18,
                       fontWeight: 800,
                       letterSpacing: '4px',
@@ -351,8 +370,8 @@ export default function TrialOtpModal({ isOpen, onClose, userProfile, onSuccess 
                   />
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, fontSize: 12, color: '#64748b' }}>
-                  <span>Code sent to: <strong style={{ color: '#0f172a' }}>{email}</strong></span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, fontSize: 12, color: isDark ? '#94a3b8' : '#64748b' }}>
+                  <span>Code sent to: <strong style={{ color: isDark ? '#ffffff' : '#0f172a' }}>{email}</strong></span>
                   {countdown > 0 ? (
                     <span>Resend in {countdown}s</span>
                   ) : (

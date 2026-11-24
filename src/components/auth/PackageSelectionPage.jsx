@@ -170,13 +170,8 @@ export default function PackageSelectionPage() {
           </p>
         </div>
 
-        {/* Pricing Cards Grid */}
-        <div className="package-cards-grid" style={{
-          display: 'grid',
-          gap: 28,
-          maxWidth: 1060,
-          margin: '0 auto',
-        }}>
+        {/* Pricing Cards Grid (Side-by-side on desktop, stacked on mobile) */}
+        <div className="package-cards-grid">
           {/* 3-Day Free Trial Package (Rs 0 / Free) */}
           <div style={{
             background: '#ffffff',

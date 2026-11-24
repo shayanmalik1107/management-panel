@@ -145,7 +145,7 @@ export default function PackageSelectionPage() {
       </header>
 
       {/* Main Container */}
-      <main style={{ maxWidth: 1040, margin: '0 auto', padding: '50px 20px' }}>
+      <main className="package-selection-main" style={{ maxWidth: 1040, margin: '0 auto' }}>
         <div style={{ textAlign: 'center', marginBottom: 44 }}>
           <div style={{
             display: 'inline-flex',
@@ -162,7 +162,7 @@ export default function PackageSelectionPage() {
           }}>
             <Sparkles size={14} /> Step 1 of 2: Select Business Subscription
           </div>
-          <h1 style={{ fontSize: 34, fontWeight: 800, color: '#0f172a', margin: '0 0 12px 0', letterSpacing: '-0.5px' }}>
+          <h1 className="package-selection-title" style={{ fontWeight: 800, color: '#0f172a', margin: '0 0 12px 0', letterSpacing: '-0.5px' }}>
             Choose the Perfect Plan for Your Business
           </h1>
           <p style={{ fontSize: 16, color: '#64748b', maxWidth: 640, margin: '0 auto' }}>
@@ -170,14 +170,8 @@ export default function PackageSelectionPage() {
           </p>
         </div>
 
-        {/* Pricing Cards Grid */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-          gap: 28,
-          maxWidth: 1060,
-          margin: '0 auto',
-        }}>
+        {/* Pricing Cards Grid (Side-by-side on desktop, stacked on mobile) */}
+        <div className="package-cards-grid">
           {/* 3-Day Free Trial Package (Rs 0 / Free) */}
           <div style={{
             background: '#ffffff',

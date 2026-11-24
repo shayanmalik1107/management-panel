@@ -29,7 +29,7 @@ import { useToast } from '../../contexts/ToastContext';
 import WhatsAppButton from '../common/WhatsAppButton';
 
 export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }) {
-  const { userProfile, companyInfo, companyId, isAdmin, currentUser } = useAuth();
+  const { userProfile, companyInfo, companyId, isAdmin, currentUser, switchCompany } = useAuth();
   const { isDark } = useTheme();
   const navigate = useNavigate();
   const toast = useToast();
@@ -40,6 +40,13 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
   // Real-time listener for user companies
   useEffect(() => {
     if (!isAdmin || !userProfile?.uid) return;
+
+    // Load cached companies first for instant 0ms offline availability
+    try {
+      const cached = JSON.parse(localStorage.getItem(`lamba_user_companies_${userProfile.uid}`) || '[]');
+      if (cached.length > 0) setUserCompanies(cached);
+    } catch (_) {}
+
     const compsRef = ref(database, 'companies');
     const unsub = onValue(compsRef, (snap) => {
       if (snap.exists()) {
@@ -47,14 +54,19 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
         snap.forEach(child => {
           const val = child.val();
           const c = val ? val.info : null;
-          if (c && c.ownerUid === userProfile.uid) {
+          if (c && (c.ownerUid === userProfile.uid || c.adminUid === userProfile.uid)) {
             comps.push({ id: child.key, ...c });
           }
         });
         setUserCompanies(comps);
+        try {
+          localStorage.setItem(`lamba_user_companies_${userProfile.uid}`, JSON.stringify(comps));
+        } catch (_) {}
       } else {
         setUserCompanies([]);
       }
+    }, (err) => {
+      console.warn('[Sidebar] Offline companies fallback:', err);
     });
     return () => unsub();
   }, [isAdmin, userProfile?.uid]);
@@ -144,9 +156,9 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
           </div>
         </div>
 
-        {/* Company Workspace & Plan Card (inside Drawer) */}
+        {/* Company Workspace & Plan Card (Mobile View & Drawer Only) */}
         {!collapsed && (
-          <div style={{ padding: '0 14px 10px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div className="sidebar-mobile-only" style={{ padding: '0 14px 10px 14px', flexDirection: 'column', gap: 8 }}>
             {/* Active Company Selector */}
             <div style={{
               background: isDark ? 'rgba(30, 41, 59, 0.7)' : '#f1f5f9',
@@ -200,9 +212,10 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
                         type="button"
                         onClick={async () => {
                           if (comp.id !== companyId) {
-                            await update(ref(database, `users/${userProfile.uid}`), { companyId: comp.id });
+                            await switchCompany(comp.id);
                             onMobileClose?.();
-                            window.location.href = '/dashboard';
+                            navigate('/dashboard');
+                            toast.success(`Switched to ${comp.name}!`);
                           }
                           setShowCompanySwitcher(false);
                         }}
@@ -304,7 +317,7 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
         <div className="sidebar-footer" style={{ paddingBottom: 'calc(var(--mobile-nav-height, 60px) + 24px)' }}>
           <button
             type="button"
-            className="sidebar-logout-btn"
+            className="sidebar-logout-btn sidebar-mobile-only"
             onClick={handleLogout}
             style={{
               display: 'flex',

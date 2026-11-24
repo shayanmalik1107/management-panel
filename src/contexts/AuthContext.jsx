@@ -1,8 +1,9 @@
 // Auth Context: Centralized authentication and user state
 import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { ref, onValue } from 'firebase/database';
+import { ref, onValue, update } from 'firebase/database';
 import { auth, database } from '../firebase';
+import { warmupOfflineData } from '../services/offlineSyncWarmup';
 
 const AuthContext = createContext(null);
 
@@ -90,7 +91,11 @@ export function AuthProvider({ children }) {
             const profile = { uid: user.uid, ...snapshot.val(), permissionsSyncedAt: Date.now() };
             setUserProfile(profile);
 
-            const companyId = profile.companyId;
+            // Silently warm up all offline collections in the background
+            warmupOfflineData(profile, user);
+
+            const activeLocalCompId = localStorage.getItem(`lamba_selected_company_${user.uid}`);
+            const companyId = activeLocalCompId || profile.companyId;
 
             // Clean up previous company listener before creating new one
             if (companyUnsubRef.current) {
@@ -106,12 +111,21 @@ export function AuthProvider({ children }) {
                   comp = { id: companyId, ...companySnap.val() };
                   setCompanyInfo(comp);
                 } else {
-                  setCompanyInfo(null);
+                  // Fallback to local storage cached company info
+                  try {
+                    const localCached = localStorage.getItem(`lamba_company_info_${companyId}`);
+                    if (localCached) comp = JSON.parse(localCached);
+                  } catch (_) {}
+                  setCompanyInfo(comp || null);
                 }
                 saveCachedAuthSession(user, profile, comp);
                 setLoading(false);
               }, (err) => {
                 console.warn('[AuthContext] Company info offline fallback:', err);
+                try {
+                  const localCached = localStorage.getItem(`lamba_company_info_${companyId}`);
+                  if (localCached) setCompanyInfo(JSON.parse(localCached));
+                } catch (_) {}
                 setLoading(false);
               });
               companyUnsubRef.current = unsubCompany;
@@ -149,11 +163,50 @@ export function AuthProvider({ children }) {
 
   const isAdmin = userProfile?.role === 'admin';
   const isEmployee = userProfile?.role === 'employee';
-  const companyId = userProfile?.companyId;
+  const targetUid = userProfile?.uid || currentUser?.uid;
+  const activeLocalCompId = targetUid ? localStorage.getItem(`lamba_selected_company_${targetUid}`) : null;
+  const companyId = activeLocalCompId || userProfile?.companyId;
   const permissions = userProfile?.permissions || {};
   const isDisabled = userProfile?.status === 'disabled';
   const isCompanyClosed = companyInfo?.status === 'closed' || companyInfo?.status === 'disabled';
   const isCompanyPending = companyInfo?.status === 'pending';
+
+  const switchCompany = async (newCompanyId) => {
+    if (!newCompanyId) return;
+    const uid = userProfile?.uid || currentUser?.uid;
+    if (uid) {
+      localStorage.setItem(`lamba_selected_company_${uid}`, newCompanyId);
+    }
+    
+    // 1. Immediately update userProfile state
+    setUserProfile(prev => prev ? ({ ...prev, companyId: newCompanyId }) : prev);
+
+    // 2. Read cached company info for instant 0ms offline switch
+    let newCompInfo = null;
+    try {
+      const localCached = localStorage.getItem(`lamba_company_info_${newCompanyId}`);
+      if (localCached) newCompInfo = JSON.parse(localCached);
+      if (!newCompInfo) {
+        const userComps = JSON.parse(localStorage.getItem(`lamba_user_companies_${uid}`) || '[]');
+        newCompInfo = userComps.find(c => c.id === newCompanyId);
+      }
+    } catch (_) {}
+    if (newCompInfo) {
+      setCompanyInfo(newCompInfo);
+    }
+
+    // 3. Update cached auth session
+    saveCachedAuthSession(currentUser, { ...userProfile, companyId: newCompanyId }, newCompInfo || companyInfo);
+
+    // 4. Try updating Firebase if online
+    try {
+      if (typeof navigator !== 'undefined' && navigator.onLine && uid) {
+        await update(ref(database, `users/${uid}`), { companyId: newCompanyId });
+      }
+    } catch (err) {
+      console.warn('[AuthContext] Cloud update for company switch delayed:', err);
+    }
+  };
 
   const hasPermission = (permission) => {
     if (isAdmin) return true;
@@ -175,6 +228,7 @@ export function AuthProvider({ children }) {
     isCompanyPending,
     hasPermission,
     canEditOrderPrice,
+    switchCompany,
     permissionsSyncedAt: userProfile?.permissionsSyncedAt || cached?.userProfile?.permissionsSyncedAt || null,
     loading,
   };

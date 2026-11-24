@@ -8,7 +8,7 @@ import { formatCurrency, formatNumber, formatDate, getLocalDateString } from '..
 import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from '../../utils/constants';
 import { ShoppingCart, Plus, TrendingUp, Clock, Users, Store, CreditCard, Calendar, X } from 'lucide-react';
 import WhatsAppButton from '../common/WhatsAppButton';
-import { getOutboxItems, getCachedCollection } from '../../services/offlineStorage';
+import { getOutboxItems, getCachedCollection, cacheCollection } from '../../services/offlineStorage';
 import { onSyncStatusChange, processOutbox } from '../../services/syncEngine';
 
 export default function EmployeeDashboard() {
@@ -236,9 +236,11 @@ export default function EmployeeDashboard() {
         pending.forEach(o => map.set(o.id || o.orderNumber, o));
         latestOrdersRef.current = Array.from(map.values());
         recalculate();
+        if (companyId) cacheCollection(companyId, 'orders', latestOrdersRef.current);
       }).catch(() => {
         latestOrdersRef.current = list;
         recalculate();
+        if (companyId) cacheCollection(companyId, 'orders', list);
       });
     }, (err) => {
       console.warn('Employee dashboard offline orders (using cached):', err);
@@ -254,6 +256,7 @@ export default function EmployeeDashboard() {
       }
       latestPaymentsRef.current = list;
       recalculate();
+      if (companyId) cacheCollection(companyId, 'payments', list);
     }, (err) => {
       console.error('Employee dashboard payments error:', err);
     });
@@ -266,6 +269,7 @@ export default function EmployeeDashboard() {
       }
       latestCustomersRef.current = list;
       recalculate();
+      if (companyId) cacheCollection(companyId, 'customers', list);
     }, (err) => {
       console.error('Employee dashboard customers error:', err);
     });

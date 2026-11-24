@@ -2400,6 +2400,32 @@ h4 { font-size: var(--font-size-lg); }
 }
 
 /* ============================================================
+   PACKAGE SELECTION PRICING CARDS (DESKTOP DEFAULT)
+   ============================================================ */
+.package-cards-grid {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 28px !important;
+  width: 100% !important;
+  max-width: 1140px !important;
+  margin: 0 auto !important;
+  align-items: stretch !important;
+}
+
+@media (max-width: 1024px) {
+  .package-cards-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+/* Hide mobile-only sidebar items on desktop */
+@media (min-width: 769px) {
+  .sidebar-mobile-only {
+    display: none !important;
+  }
+}
+
+/* ============================================================
    RESPONSIVE (TABLETS & MOBILE) — max-width: 768px
    ============================================================ */
 @media (max-width: 768px) {

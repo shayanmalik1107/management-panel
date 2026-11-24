@@ -11,7 +11,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import MaxPlanUpgradeModal from '../common/MaxPlanUpgradeModal';
 
 export default function SelectCompanyPage() {
-  const { userProfile, companyId, currentUser } = useAuth();
+  const { userProfile, companyId, currentUser, switchCompany } = useAuth();
   const { isDark } = useTheme();
   const navigate = useNavigate();
   const toast = useToast();
@@ -188,16 +188,27 @@ export default function SelectCompanyPage() {
     }
     setSelectingId(targetCompanyId);
     try {
-      await update(ref(database, `users/${userProfile.uid}`), { companyId: targetCompanyId });
-      localStorage.setItem(`lamba_selected_company_${userProfile.uid}`, targetCompanyId);
+      if (switchCompany) {
+        await switchCompany(targetCompanyId);
+      } else {
+        await update(ref(database, `users/${userProfile.uid}`), { companyId: targetCompanyId });
+        localStorage.setItem(`lamba_selected_company_${userProfile.uid}`, targetCompanyId);
+      }
       sessionStorage.setItem('company_selected', 'true');
       sessionStorage.setItem('lamba_auto_open_ai', 'true');
       toast.success('Switched to company workspace!');
       navigate('/dashboard');
     } catch (err) {
       console.error('Error selecting company:', err);
-      toast.error('Failed to select company');
-      setSelectingId(null);
+      // In offline mode, still navigate if company is cached locally
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        localStorage.setItem(`lamba_selected_company_${userProfile?.uid || currentUser?.uid}`, targetCompanyId);
+        toast.info('Switched workspace (Offline)');
+        navigate('/dashboard');
+      } else {
+        toast.error('Failed to select company');
+        setSelectingId(null);
+      }
     }
   };
 
